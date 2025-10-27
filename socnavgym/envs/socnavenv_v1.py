@@ -15,6 +15,7 @@ import torch
 import yaml
 from gymnasium import spaces
 from shapely.geometry import Point, Polygon
+from scipy.spatial import KDTree
 from collections import namedtuple
 import math
 from math import ceil
@@ -42,6 +43,8 @@ from socnavgym.envs.utils.sngnnv2.socnav import SocNavDataset
 from socnavgym.envs.utils.sngnnv2.socnav_V2_API import Human as otherHuman
 from socnavgym.envs.utils.sngnnv2.socnav_V2_API import Object as otherObject
 from socnavgym.envs.utils.sngnnv2.socnav_V2_API import SNScenario, SocNavAPI
+
+from socnavgym.envs.utils.navigation.probabilistic_road_map import prm_planning
 
 DEBUG = 0
 if 'debug' in sys.argv or "debug=2" in sys.argv:
@@ -281,6 +284,12 @@ class SocNavEnv_v1(gym.Env):
         # cuda device
         self.cuda_device = None
 
+        # PRM settings for human navigation
+        self.USE_PRM_FOR_HUMANS = False
+        self.PRM_RADIUS_MARGIN = 0.0
+        self.PRM_OBS_SAMPLE_STEP = 0.3
+        self._prm_obstacles = None
+
         # configuring the environment parameters
         self._configure(config)
 
@@ -353,6 +362,12 @@ class SocNavEnv_v1(gym.Env):
             self.HUMAN_POS_NOISE_STD = config["human"]["pos_noise_std"]
         if "angle_noise_std" in config["human"].keys():
             self.HUMAN_ANGLE_NOISE_STD = config["human"]["angle_noise_std"]
+
+        # drawing of human waypoints flag
+        try:
+            self.DRAW_HUMAN_WAYPOINTS = bool(config.get("human", {}).get("draw_waypoints", False))
+        except Exception:
+            self.DRAW_HUMAN_WAYPOINTS = False
 
         # laptop
         self.LAPTOP_WIDTH = config["laptop"]["laptop_width"]
@@ -503,6 +518,24 @@ class SocNavEnv_v1(gym.Env):
         
         # cuda device
         self.cuda_device = config["env"]["cuda_device"]
+        # optional PRM configuration
+        try:
+            self.USE_PRM_FOR_HUMANS = bool(config.get("human", {}).get("use_prm", False))
+        except Exception:
+            self.USE_PRM_FOR_HUMANS = False
+        try:
+            self.PRM_RADIUS_MARGIN = float(config.get("human", {}).get("prm_radius_margin", 0.0))
+        except Exception:
+            self.PRM_RADIUS_MARGIN = 0.0
+        try:
+            self.PRM_OBS_SAMPLE_STEP = float(config.get("env", {}).get("prm_obstacle_sample_step", 0.3))
+        except Exception:
+            self.PRM_OBS_SAMPLE_STEP = 0.3
+        # max retries for PRM path planning (retry with new samples if no path found)
+        try:
+            self.PRM_MAX_RETRIES = int(config.get("human", {}).get("prm_max_retries", 3))
+        except Exception:
+            self.PRM_MAX_RETRIES = 3
 
         # reward
         self.REWARD_PATH = config["env"]["reward_file"]
@@ -1155,7 +1188,8 @@ class SocNavEnv_v1(gym.Env):
         return d
     
     def get_desired_force(self, human:Human):
-        e_d = np.array([(human.goal_x - human.x), (human.goal_y - human.y)], dtype=np.float32)
+        tx, ty = human.current_target()
+        e_d = np.array([tx - human.x, ty - human.y], dtype=np.float32)
         if np.linalg.norm(e_d) != 0:
             e_d /= np.linalg.norm(e_d)
         f_d = self.MAX_ADVANCE_HUMAN * e_d
@@ -1367,8 +1401,9 @@ class SocNavEnv_v1(gym.Env):
 
         # adding the current human to the simulator
         thisHuman = sim.addAgent((human.x, human.y))
-        # preferred velocity is towards the goal
-        pref_vel = np.array([human.goal_x-human.x, human.goal_y-human.y], dtype=np.float32)
+        # preferred velocity is towards the current waypoint (or final goal if no waypoints)
+        tx, ty = human.current_target()
+        pref_vel = np.array([tx - human.x, ty - human.y], dtype=np.float32)
         # normalising the velocity
         if not np.linalg.norm(pref_vel) == 0:
             pref_vel /= np.linalg.norm(pref_vel)
@@ -1379,8 +1414,9 @@ class SocNavEnv_v1(gym.Env):
         # adding visible humans as agents
         for human in visible_humans:
             h = sim.addAgent((human.x, human.y))
-            # preferred velocity is towards the goal
-            pref_vel = np.array([human.goal_x-human.x, human.goal_y-human.y], dtype=np.float32)
+            # preferred velocity is towards the current waypoint (or final goal if no waypoints)
+            tx, ty = human.current_target()
+            pref_vel = np.array([tx - human.x, ty - human.y], dtype=np.float32)
             # normalising the velocity
             if not np.linalg.norm(pref_vel) == 0:
                 pref_vel /= np.linalg.norm(pref_vel)
@@ -1491,8 +1527,9 @@ class SocNavEnv_v1(gym.Env):
         # adding visible humans as agents
         for human in visible_humans:
             h = sim.addAgent((human.x, human.y))
-            # preferred velocity is towards the goal
-            pref_vel = np.array([human.goal_x-human.x, human.goal_y-human.y], dtype=np.float32)
+            # preferred velocity is towards the current waypoint (or final goal if no waypoints)
+            tx, ty = human.current_target()
+            pref_vel = np.array([tx - human.x, ty - human.y], dtype=np.float32)
             # normalising the velocity
             if not np.linalg.norm(pref_vel) == 0:
                 pref_vel /= np.linalg.norm(pref_vel)
@@ -1553,6 +1590,102 @@ class SocNavEnv_v1(gym.Env):
             return get_square_around_circle(obs.x, obs.y, self.INTERACTION_RADIUS)
 
         else: raise NotImplementedError
+
+    def _build_prm_obstacles_pointcloud(self, step=0.3):
+        """
+        Build a point-cloud representation of static obstacles for PRM collision checking.
+        Returns:
+            (ox, oy): lists of obstacle point coordinates.
+        """
+        ox, oy = [], []
+
+        def add_rect(cx, cy, theta, L, W, step_len):
+            """
+            Densify rectangle: sample full area not only border.
+            cx, cy: center
+            theta: heading of length axis
+            L, W: length and width
+            step_len: spacing between samples
+            """
+            u = np.array([np.cos(theta), np.sin(theta)], dtype=np.float32)      # length axis
+            v = np.array([-np.sin(theta), np.cos(theta)], dtype=np.float32)     # width axis
+
+            num_L = max(2, int(np.ceil(max(L, 1e-6) / step_len)))
+            num_W = max(2, int(np.ceil(max(W, 1e-6) / step_len)))
+
+            ts = np.linspace(-L/2.0, L/2.0, num_L)
+            ws = np.linspace(-W/2.0, W/2.0, num_W)
+
+            # fill interior on a grid
+            for t in ts:
+                for w in ws:
+                    p = np.array([cx, cy]) + u*t + v*w
+                    ox.append(float(p[0]))
+                    oy.append(float(p[1]))
+
+        def add_circle(cx, cy, r, step_len):
+            # radial fill
+            n_theta = max(8, int(np.ceil(2*np.pi*max(r,1e-6)/step_len)))
+            thetas = np.linspace(0.0, 2.0*np.pi, n_theta, endpoint=False)
+
+            # sample radii from 0 to r
+            n_r = max(2, int(np.ceil(r / step_len)))
+            radii = np.linspace(0.0, r, n_r+1)
+
+            for rad in radii:
+                for a in thetas:
+                    ox.append(float(cx + rad*np.cos(a)))
+                    oy.append(float(cy + rad*np.sin(a)))
+
+        # walls
+        for w in self.walls:
+            add_rect(w.x, w.y, w.orientation, w.length, w.thickness, step)
+        # tables
+        for t in self.tables:
+            add_rect(t.x, t.y, t.orientation, t.length, t.width, step)
+        # chairs
+        for c in self.chairs:
+            add_rect(c.x, c.y, c.orientation, c.length, c.width, step)
+        # laptops
+        for l in self.laptops:
+            add_rect(l.x, l.y, l.orientation, l.length, l.width, step)
+        # plants
+        for p in self.plants:
+            add_circle(p.x, p.y, p.radius, step)
+
+        # include robot footprint at reset time to discourage paths crossing robot initially
+        #add_circle(self.robot.x, self.robot.y, self.ROBOT_RADIUS, step)
+
+        return ox, oy
+
+    def _plan_prm_waypoints(self, sx, sy, gx, gy, rr, resample=False):
+        """
+        Plan a PRM path and return waypoints [(x0,y0), ... , (xN,yN)] from start to goal.
+        Returns None if no path was found.
+        """
+        if self._prm_obstacles is None:
+            ox, oy = [], []
+        else:
+            ox, oy = self._prm_obstacles
+
+        max_retries = getattr(self, "PRM_MAX_RETRIES", 3)
+        waypoints = None
+        for _ in range(max_retries):
+            # use a fresh RNG each attempt to resample different PRM nodes
+            rx, ry = prm_planning(sx, sy, gx, gy, ox, oy, rr, rng=np.random.default_rng())
+        
+            if rx is not None and len(rx) > 0:
+                # planner returns goal->start; reverse to start->goal
+                rx = rx[::-1]
+                ry = ry[::-1]
+                waypoints = list(zip(rx, ry))
+                break
+        if not waypoints:
+            #print("no waypoint found")
+            waypoints = [(gx, gy)]
+
+        return waypoints
+
 
     def compute_orca_interaction_velocities(self):
         """
@@ -1916,6 +2049,13 @@ class SocNavEnv_v1(gym.Env):
                 if o is not None:
                     human.set_goal(o.x, o.y)
                     self.goals[human.id] = o
+                    if self.USE_PRM_FOR_HUMANS:
+                        # reuse cached obstacle cloud
+                        waypoints = self._plan_prm_waypoints(human.x, human.y, o.x, o.y, self.HUMAN_DIAMETER/2 + self.PRM_RADIUS_MARGIN)
+                    else:
+                        waypoints = None
+                    if waypoints:
+                        human.set_waypoints(waypoints, wp_thresh=self.HUMAN_GOAL_RADIUS)
 
         # update goals of interactions
         for i in self.moving_interactions:
@@ -2939,7 +3079,7 @@ class SocNavEnv_v1(gym.Env):
             location (int): an integer between 0-3 (both inclusive)
         """
         if location == 0:
-            min_gap = max(self.ROBOT_RADIUS*2, self.HUMAN_DIAMETER) + 0.5
+            min_gap = max(self.ROBOT_RADIUS*2, self.HUMAN_DIAMETER) * 4 + 0.5
             gap1 = random.random() * min_gap + min_gap  # gap1 is sampled between min_gap and 2*min_gap
             gap2 = random.random() * min_gap + min_gap  # gap2 is sampled between min_gap and 2*min_gap
             gap1_center = random.random() * (self.MAP_X - gap1 - self.L_X) + (-self.MAP_X/2 + gap1/2)  # center of gap1 is sampled between (-X/2 + gap1/2, X/2 - LX - gap1/2)
@@ -3134,7 +3274,8 @@ class SocNavEnv_v1(gym.Env):
                 "prob_to_avoid_robot": self.PROB_TO_AVOID_ROBOT,
                 "type": human_type,
                 "pos_noise_std": self.HUMAN_POS_NOISE_STD,
-                "angle_noise_std": self.HUMAN_ANGLE_NOISE_STD
+                "angle_noise_std": self.HUMAN_ANGLE_NOISE_STD,
+                "draw_waypoints": self.DRAW_HUMAN_WAYPOINTS
             }
         elif object_type == SocNavGymObject.PLANT:
             arg_dict = {
@@ -3509,12 +3650,21 @@ class SocNavEnv_v1(gym.Env):
             self.id += 1
 
         # adding goals
+        if self.USE_PRM_FOR_HUMANS:
+            # build obstacle point cloud once per episode for PRM
+            self._prm_obstacles = self._build_prm_obstacles_pointcloud(self.PRM_OBS_SAMPLE_STEP)
         for human in self.dynamic_humans:   
             o = self.sample_goal(self.HUMAN_GOAL_RADIUS, HALF_SIZE_X, HALF_SIZE_Y)
             if o is None:
                 return False, None, None
             self.goals[human.id] = o
             human.set_goal(o.x, o.y)
+            if self.USE_PRM_FOR_HUMANS:
+                waypoints = self._plan_prm_waypoints(human.x, human.y, o.x, o.y, self.HUMAN_DIAMETER/2 + self.PRM_RADIUS_MARGIN, resample=True)
+            else:
+                waypoints = None
+            if waypoints:
+                human.set_waypoints(waypoints, wp_thresh=self.HUMAN_GOAL_RADIUS)
 
         for human in self.static_humans:   
             self.goals[human.id] = Plant(id=None, x=human.x, y=human.y, radius=self.HUMAN_GOAL_RADIUS)

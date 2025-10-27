@@ -28,7 +28,9 @@ class Human(Object):
         type="dynamic",
         fov=2*np.pi,
         pos_noise_std=None,
-        angle_noise_std=None
+        angle_noise_std=None,
+        draw_waypoints=False,
+        waypoints=None
     ) -> None:
         super().__init__(id, "human")
         self.width = None  # diameter of the human
@@ -44,11 +46,17 @@ class Human(Object):
         self.type = type  # whether human is static or dynamic
         self.pos_noise_std = pos_noise_std if pos_noise_std!=None else 0
         self.angle_noise_std = angle_noise_std if angle_noise_std!=None else 0
+        self.draw_waypoints = bool(draw_waypoints)
         
         assert(self.type == "static" or self.type == "dynamic"), "type can be \"static\" or \"dynamic\" only."
         self.set(id, x, y, theta, width, speed, goal_x, goal_y, goal_radius, policy)
 
         self.initial_time = time.time()
+        # PRM waypoint following
+        self.waypoints = waypoints  # list of (x, y) tuples or None
+        self.cur_wp_idx = 0
+        # waypoint switching threshold (defaults to goal_radius if available, else 0.5m)
+        self.wp_thresh = self.goal_radius if getattr(self, "goal_radius", None) is not None else 0.5
 
     def set_goal(self, goal_x, goal_y):
         self.goal_x = goal_x
@@ -106,6 +114,39 @@ class Human(Object):
     def update_orientation(self, theta):
         if self.type == "static": return  # static humans do not change their orientation
         self.orientation = theta
+
+    def current_target(self):
+        """
+        Returns the current waypoint target. Advances to the next waypoint if within threshold.
+        If no waypoints are set, falls back to the final goal.
+        """
+        if self.waypoints is None or len(self.waypoints) == 0:
+            return (self.goal_x, self.goal_y)
+        # clamp index
+        if self.cur_wp_idx < 0:
+            self.cur_wp_idx = 0
+        if self.cur_wp_idx >= len(self.waypoints):
+            self.cur_wp_idx = len(self.waypoints) - 1
+        tx, ty = self.waypoints[self.cur_wp_idx]
+        dx = tx - self.x
+        dy = ty - self.y
+        thresh = self.wp_thresh if self.wp_thresh is not None else 0.5
+        if dx*dx + dy*dy < thresh**2:
+            if self.cur_wp_idx < len(self.waypoints) - 1:
+                self.cur_wp_idx += 1
+                tx, ty = self.waypoints[self.cur_wp_idx]
+        return (tx, ty)
+
+    def set_waypoints(self, waypoints, wp_thresh=None):
+        """
+        Assign a new list of waypoints for this human to follow.
+        waypoints: iterable of (x, y) tuples starting at (approximately) the human's current position and ending at the final goal.
+        wp_thresh: optional float distance to switch to the next waypoint.
+        """
+        self.waypoints = list(waypoints) if waypoints is not None else None
+        self.cur_wp_idx = 0
+        if wp_thresh is not None:
+            self.wp_thresh = wp_thresh
 
     def update(self, time):
         """
@@ -260,6 +301,44 @@ class Human(Object):
             black,
             -1,
         )  # drawing a circle for the head of the human
+
+        # draw waypoints and path if available
+        if self.draw_waypoints and self.waypoints is not None and len(self.waypoints) > 0:
+            try:
+                # colors and sizes
+                path_color = (255, 0, 255)  # magenta
+                node_color = (200, 0, 200)  # slightly different magenta
+                target_color = (0, 0, 255)  # red
+                node_radius_px = 4
+                target_radius_px = 6
+                thickness = 1
+
+                # clamp current waypoint index without modifying it
+                idx = max(0, min(self.cur_wp_idx, len(self.waypoints) - 1))
+
+                # convert waypoints to pixel coordinates
+                wp_pts = []
+                for (wx, wy) in self.waypoints:
+                    px = w2px(wx, PIXEL_TO_WORLD_X, MAP_SIZE_X)
+                    py = w2py(wy, PIXEL_TO_WORLD_Y, MAP_SIZE_Y)
+                    wp_pts.append([int(px), int(py)])
+
+                # draw path polyline
+                if len(wp_pts) >= 2:
+                    poly = np.array(wp_pts, dtype=np.int32).reshape((-1, 1, 2))
+                    cv2.polylines(img, [poly], False, path_color, thickness)
+
+                # draw waypoint nodes
+                for j, (px, py) in enumerate(wp_pts):
+                    cv2.circle(img, (px, py), node_radius_px, node_color, -1)
+
+                # highlight current target waypoint
+                if 0 <= idx < len(wp_pts):
+                    cx, cy = wp_pts[idx]
+                    cv2.circle(img, (cx, cy), target_radius_px, target_color, 2)
+            except Exception:
+                # avoid breaking rendering if anything goes wrong
+                pass
 
     def draw_gaze_range(self, img, gaze_angle, PIXEL_TO_WORLD_X, PIXEL_TO_WORLD_Y, MAP_SIZE_X, MAP_SIZE_Y):
         center = (w2px(self.x, PIXEL_TO_WORLD_X, MAP_SIZE_X), w2py(self.y, PIXEL_TO_WORLD_Y, MAP_SIZE_Y))
