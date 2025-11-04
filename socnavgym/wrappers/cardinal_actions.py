@@ -1,0 +1,35 @@
+import gymnasium as gym
+from gymnasium.spaces import Discrete
+from socnavgym.envs.socnavenv_v1 import SocNavEnv_v1
+import numpy as np
+
+
+class CardinalActions(gym.ActionWrapper):
+    """A wrapper class to take in discrete actions, and convert to continuous action space.
+    """
+    def __init__(self, env: SocNavEnv_v1):
+        super().__init__(env)
+        self.action_space = Discrete(7)
+
+    def discrete_to_continuous_action(self, action:int):
+        # Move right
+        if action == 0:
+            return np.array([0, 1, 0.0], dtype=np.float32) 
+        # Move left
+        elif action == 1:
+            return np.array([0, -1, 0.0], dtype=np.float32) 
+        # Move forward
+        elif action == 2:
+            return np.array([1, 0.0, 0.0], dtype=np.float32)
+        # Move backward
+        elif action == 3:
+            return np.array([-1, 0.0, 0.0], dtype=np.float32)
+        # No Op
+        elif action == 4:
+            return np.array([0.0, 0.0, 0.0], dtype=np.float32)
+        else:
+            raise NotImplementedError
+
+    def action(self, action):
+        return self.discrete_to_continuous_action(action)
+    

@@ -2631,7 +2631,7 @@ class SocNavEnv_v1(gym.Env):
 
         # calculate the distance to the goal
         distance_to_goal = np.sqrt((self.robot.goal_x - self.robot.x)**2 + (self.robot.goal_y - self.robot.y)**2)
-        diff_goal_angle = abs(np.arctan2(np.sin(self.robot.goal_a), np.cos(self.robot.goal_a)) - np.arctan2(np.sin(self.robot.orientation), np.cos(self.robot.orientation)))
+        diff_goal_angle = 0 #abs(np.arctan2(np.sin(self.robot.goal_a), np.cos(self.robot.goal_a)) - np.arctan2(np.sin(self.robot.orientation), np.cos(self.robot.orientation)))
 
         # calculate the distance to goal for the orca robot
         if (not self.has_orca_robot_collided) and (not self.has_orca_robot_reached_goal):
@@ -3557,6 +3557,17 @@ class SocNavEnv_v1(gym.Env):
         self.orca_robot_reach_time = None
         self.orca_robot_path_length = 0
 
+        robot_goal = self.sample_goal(self.GOAL_RADIUS, HALF_SIZE_X, HALF_SIZE_Y)
+        if robot_goal is None:
+            return False, None, None
+        self.goals[self.robot.id] = robot_goal
+        self.robot.goal_x = robot_goal.x
+        self.robot.goal_y = robot_goal.y
+        self.robot.goal_a = random.uniform(-np.pi, np.pi)
+        self.robot_orca.goal_x = robot_goal.x
+        self.robot_orca.goal_y = robot_goal.y
+        self.robot_orca.goal_a = self.robot.goal_a
+
         # dynamic humans
         for _ in range(self.NUMBER_OF_DYNAMIC_HUMANS): # spawn specified number of humans
             human = self._sample_object(start_time, SocNavGymObject.DYNAMIC_HUMAN)
@@ -3710,17 +3721,6 @@ class SocNavEnv_v1(gym.Env):
         for human in self.static_humans:   
             self.goals[human.id] = Plant(id=None, x=human.x, y=human.y, radius=self.HUMAN_GOAL_RADIUS)
             human.set_goal(human.x, human.y)  # setting goal of static humans to where they are spawned
-
-        robot_goal = self.sample_goal(self.GOAL_RADIUS, HALF_SIZE_X, HALF_SIZE_Y)
-        if robot_goal is None:
-            return False, None, None
-        self.goals[self.robot.id] = robot_goal
-        self.robot.goal_x = robot_goal.x
-        self.robot.goal_y = robot_goal.y
-        self.robot.goal_a = random.uniform(-np.pi, np.pi)
-        self.robot_orca.goal_x = robot_goal.x
-        self.robot_orca.goal_y = robot_goal.y
-        self.robot_orca.goal_a = self.robot.goal_a
 
         for i in self.moving_interactions:
             o = self.sample_goal(self.INTERACTION_GOAL_RADIUS, HALF_SIZE_X, HALF_SIZE_Y)
