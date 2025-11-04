@@ -43,6 +43,8 @@ class Human_Laptop_Interaction:
         self.human.initial_orientation = self.human.orientation
         self.x = (self.laptop.x + self.human.x)/2
         self.y = (self.laptop.y + self.human.y)/2
+        self.human.type = "static"
+        self.human.speed = 0
 
 
     def collides(self, obj, human_only=False):

@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial import KDTree
 
 # parameter
-N_SAMPLE = 1000  # number of sample_points
+N_SAMPLE = 100  # number of sample_points
 N_KNN = 10  # number of edge from one sampled point
 MAX_EDGE_LEN = 30.0  # [m] Maximum edge length
 

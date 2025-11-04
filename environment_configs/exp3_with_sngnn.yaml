@@ -11,7 +11,7 @@ robot:
     robot_radius: 0.25  # radius of the robot
     goal_radius: 0.35  # radius of the goal
     robot_type: "diff-drive"  # there are two types, diff-drive or holonomic
-
+    goal_orientation_factor: 2
 human:
     human_diameter: 0.72  # diameter of the human
     human_goal_radius: 0.25  # radius of human's goal

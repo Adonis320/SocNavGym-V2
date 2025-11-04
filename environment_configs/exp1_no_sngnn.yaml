@@ -3,9 +3,9 @@ rendering:
     milliseconds: 30  # delay parameter for waitKey()
 
 episode:
-    episode_length: 200  # maximum steps in an episode
+    episode_length: 600  # maximum steps in an episode
     time_step: 1  # number of seconds that one step corresponds to
-    end_with_collision: True # episode end with collision
+    end_with_collision: False # episode end with collision
 
 robot:
     robot_radius: 0.25  # radius of the robot
@@ -19,6 +19,11 @@ human:
     gaze_angle: 3.14159  # gaze value for humans would be set to 1 when the robot lies between -gaze_angle/2 and +gaze_angle/2
     fov_angle: 6.2831853  # the frame of view for humans
     prob_to_avoid_robot: 0.0  # the probability that the human would consider the robot in it's policy
+    use_prm: True  # enable PRM-based waypoint following for humans
+    prm_radius_margin: 0.0  # extra clearance added to human radius when planning
+    draw_waypoints: True
+    prm_max_retries: 1
+    waypoint_switch_radius: 0.25
 
 laptop:
     laptop_width: 0.4  # width of the laptop
@@ -62,8 +67,8 @@ env:
     min_static_humans: 0  # minimum no. of static humans
     max_static_humans: 0  # maximum no. of static humans
 
-    min_dynamic_humans: 1  # minimum no. of dynamic humans
-    max_dynamic_humans: 1  # maximum no. of dynamic humans
+    min_dynamic_humans: 5  # minimum no. of dynamic humans
+    max_dynamic_humans: 5  # maximum no. of dynamic humans
 
     min_tables: 0  # minimum no. of tables
     max_tables: 0  # maximum no. of tables  
@@ -98,7 +103,7 @@ env:
     get_padded_observations: False  # flag value that indicates whether you require padded observations or not. You can change it using env.set_padded_observations(True/False)
     
     set_shape: "square"  # can be "random", "square", "rectangle", "L" or "no-walls" 
-    add_corridors: False  # True or False, whether there should be corridors in the environment. Corridors cannot be added for L shaped rooms
+    add_corridors: True  # True or False, whether there should be corridors in the environment. Corridors cannot be added for L shaped rooms
 
     min_map_x: 10  # minimum size of map along x direction
     max_map_x: 10  # maximum size of map along x direction

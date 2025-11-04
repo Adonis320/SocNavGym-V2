@@ -28,7 +28,9 @@ class Human_Human_Interaction:
         noise=0, 
         can_disperse=True,
         pos_noise_std=None,
-        angle_noise_std=None
+        angle_noise_std=None,
+        draw_waypoints=False,
+        waypoints=None
         ) -> None:
 
         # center of interaction
@@ -53,7 +55,9 @@ class Human_Human_Interaction:
         self.goal_y = None
         self.noise_variance = noise
         self.can_disperse = can_disperse
-
+        self.draw_waypoints = bool(draw_waypoints)
+        # PRM waypoint following
+        self.waypoints = waypoints  # list of (x, y) tuples or None
         for _ in range(numOfHumans):
             if self.type == "stationary":
                 self.add_human(Human(speed=0, width=human_width, goal_radius=self.goal_radius, policy=random.choice(["orca", "sfm"]), 
@@ -202,4 +206,73 @@ class Human_Human_Interaction:
             )
         points = np.array(points).reshape((-1,1,2))
         cv2.polylines(img, [np.int32(points)], True, (0, 0, 255), 1)
+         # draw waypoints and path if available
+        if self.draw_waypoints and self.waypoints is not None and len(self.waypoints) > 0:
+            try:
+                # colors and sizes
+                path_color = (255, 0, 255)  # magenta
+                node_color = (200, 0, 200)  # slightly different magenta
+                target_color = (0, 0, 255)  # red
+                node_radius_px = 4
+                target_radius_px = 6
+                thickness = 1
+
+                # clamp current waypoint index without modifying it
+                idx = max(0, min(self.cur_wp_idx, len(self.waypoints) - 1))
+
+                # convert waypoints to pixel coordinates
+                wp_pts = []
+                for (wx, wy) in self.waypoints:
+                    px = w2px(wx, PIXEL_TO_WORLD_X, MAP_SIZE_X)
+                    py = w2py(wy, PIXEL_TO_WORLD_Y, MAP_SIZE_Y)
+                    wp_pts.append([int(px), int(py)])
+
+                # draw path polyline
+                if len(wp_pts) >= 2:
+                    poly = np.array(wp_pts, dtype=np.int32).reshape((-1, 1, 2))
+                    cv2.polylines(img, [poly], False, path_color, thickness)
+
+                # draw waypoint nodes
+                for j, (px, py) in enumerate(wp_pts):
+                    cv2.circle(img, (px, py), node_radius_px, node_color, -1)
+
+                # highlight current target waypoint
+                if 0 <= idx < len(wp_pts):
+                    cx, cy = wp_pts[idx]
+                    cv2.circle(img, (cx, cy), target_radius_px, target_color, 2)
+            except Exception:
+                # avoid breaking rendering if anything goes wrong
+                pass
     
+    def current_target(self):
+        """
+        Returns the current waypoint target. Advances to the next waypoint if within threshold.
+        If no waypoints are set, falls back to the final goal.
+        """
+        if self.waypoints is None or len(self.waypoints) == 0:
+            return (self.goal_x, self.goal_y)
+        # clamp index
+        if self.cur_wp_idx < 0:
+            self.cur_wp_idx = 0
+        if self.cur_wp_idx >= len(self.waypoints):
+            self.cur_wp_idx = len(self.waypoints) - 1
+        tx, ty = self.waypoints[self.cur_wp_idx]
+        dx = tx - self.x
+        dy = ty - self.y
+        thresh = self.wp_thresh if self.wp_thresh is not None else 0.5
+        if dx*dx + dy*dy < thresh**2:
+            if self.cur_wp_idx < len(self.waypoints) - 1:
+                self.cur_wp_idx += 1
+                tx, ty = self.waypoints[self.cur_wp_idx]
+        return (tx, ty)
+
+    def set_waypoints(self, waypoints, wp_thresh=None):
+        """
+        Assign a new list of waypoints for this human to follow.
+        waypoints: iterable of (x, y) tuples starting at (approximately) the human's current position and ending at the final goal.
+        wp_thresh: optional float distance to switch to the next waypoint.
+        """
+        self.waypoints = list(waypoints) if waypoints is not None else None
+        self.cur_wp_idx = 0
+        if wp_thresh is not None:
+            self.wp_thresh = wp_thresh

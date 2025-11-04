@@ -349,7 +349,10 @@ class SocNavEnv_v1(gym.Env):
             self.MAX_GOAL_ORIENTATION_THRESHOLD = self.MIN_GOAL_ORIENTATION_THRESHOLD
         assert(self.MAX_GOAL_ORIENTATION_THRESHOLD >=  self.MIN_GOAL_ORIENTATION_THRESHOLD), "the maximum goal orientation threshold should be greater or equal than the minimum goal orientation threshold"
 
-        self.GOAL_ORIENTATION_THRESHOLD = np.pi
+        if "goal_orientation_factor" in config["robot"].keys():
+            self.GOAL_ORIENTATION_THRESHOLD = np.pi * config["robot"]["goal_orientation_factor"]
+        else:
+            self.GOAL_ORIENTATION_THRESHOLD = np.pi * 2
         # human
         self.HUMAN_DIAMETER = config["human"]["human_diameter"]
         self.HUMAN_GOAL_RADIUS = config["human"]["human_goal_radius"]
@@ -1442,7 +1445,8 @@ class SocNavEnv_v1(gym.Env):
             h = sim.addAgent((i.x, i.y))
             sim.setAgentRadius(h, self.INTERACTION_RADIUS+self.HUMAN_DIAMETER)
             sim.setAgentNeighborDist(h, 2*(self.INTERACTION_RADIUS + self.HUMAN_DIAMETER))
-            pref_vel = np.array([i.goal_x-i.x, i.goal_y-i.y], dtype=np.float32)
+            tx, ty = i.current_target()
+            pref_vel = np.array([tx - i.x, ty - i.y], dtype=np.float32)
             if not np.linalg.norm(pref_vel) == 0:
                 pref_vel /= np.linalg.norm(pref_vel)
             pref_vel *= self.MAX_ADVANCE_HUMAN
@@ -1542,7 +1546,8 @@ class SocNavEnv_v1(gym.Env):
             h = sim.addAgent((i.x, i.y))
             sim.setAgentRadius(h, self.INTERACTION_RADIUS+self.HUMAN_DIAMETER)
             sim.setAgentNeighborDist(h, 2*(self.INTERACTION_RADIUS + self.HUMAN_DIAMETER))
-            pref_vel = np.array([i.goal_x-i.x, i.goal_y-i.y], dtype=np.float32)
+            tx, ty = i.current_target()
+            pref_vel = np.array([tx - i.x, ty - i.y], dtype=np.float32)
             if not np.linalg.norm(pref_vel) == 0:
                 pref_vel /= np.linalg.norm(pref_vel)
             pref_vel *= self.MAX_ADVANCE_HUMAN
@@ -1658,7 +1663,7 @@ class SocNavEnv_v1(gym.Env):
 
         return ox, oy
 
-    def _plan_prm_waypoints(self, sx, sy, gx, gy, rr, resample=False):
+    def _plan_prm_waypoints(self, sx, sy, gx, gy, rr):
         """
         Plan a PRM path and return waypoints [(x0,y0), ... , (xN,yN)] from start to goal.
         Returns None if no path was found.
@@ -1680,9 +1685,6 @@ class SocNavEnv_v1(gym.Env):
                 ry = ry[::-1]
                 waypoints = list(zip(rx, ry))
                 break
-        if not waypoints:
-            #print("no waypoint found")
-            waypoints = [(gx, gy)]
 
         return waypoints
 
@@ -1718,7 +1720,8 @@ class SocNavEnv_v1(gym.Env):
             h = sim.addAgent((i.x, i.y))
             sim.setAgentRadius(h, self.INTERACTION_RADIUS+self.HUMAN_DIAMETER)
             sim.setAgentNeighborDist(h, 2*(self.INTERACTION_RADIUS + self.HUMAN_DIAMETER))
-            pref_vel = np.array([i.goal_x-i.x, i.goal_y-i.y], dtype=np.float32)
+            tx, ty = i.current_target()
+            pref_vel = np.array([tx - i.x, ty - i.y], dtype=np.float32)
             if not np.linalg.norm(pref_vel) == 0:
                 pref_vel /= np.linalg.norm(pref_vel)
             pref_vel *= self.MAX_ADVANCE_HUMAN
@@ -1859,7 +1862,6 @@ class SocNavEnv_v1(gym.Env):
             if stop_moving:
                 for human in i.humans:
                     human.speed = 0
-
 
         for human in all_humans:
             human.update(self.TIMESTEP)
@@ -2037,7 +2039,6 @@ class SocNavEnv_v1(gym.Env):
         for index, i in enumerate(self.moving_interactions):
             i.update_speed(self.TIMESTEP, interaction_vels[index], self.MAX_ROTATION_HUMAN)
 
-        
         # update the goals for humans if they have reached goal
         for human in self.dynamic_humans:
             if self.crowd_forming and human.id in self.humans_forming_crowd.keys(): continue  # handling the humans forming a crowd separately
@@ -2051,7 +2052,12 @@ class SocNavEnv_v1(gym.Env):
                     self.goals[human.id] = o
                     if self.USE_PRM_FOR_HUMANS:
                         # reuse cached obstacle cloud
-                        waypoints = self._plan_prm_waypoints(human.x, human.y, o.x, o.y, self.HUMAN_DIAMETER/2 + self.PRM_RADIUS_MARGIN)
+                        waypoints = None
+                        while not waypoints:
+                            o = self.sample_goal(self.HUMAN_GOAL_RADIUS, HALF_SIZE_X, HALF_SIZE_Y)
+                            self.goals[human.id] = o
+                            human.set_goal(o.x, o.y)
+                            waypoints = self._plan_prm_waypoints(human.x, human.y, o.x, o.y, self.HUMAN_DIAMETER/2 + self.PRM_RADIUS_MARGIN)
                     else:
                         waypoints = None
                     if waypoints:
@@ -2067,6 +2073,19 @@ class SocNavEnv_v1(gym.Env):
                     i.set_goal(o.x, o.y)
                     for human in i.humans:
                         self.goals[human.id] = o
+                if self.USE_PRM_FOR_HUMANS:
+                    waypoints = None
+                    o = self.sample_goal(self.INTERACTION_GOAL_RADIUS, HALF_SIZE_X, HALF_SIZE_Y)
+                    if o is not None:
+                        i.set_goal(o.x, o.y)
+                        for human in i.humans:
+                            self.goals[human.id] = o
+                    while not waypoints:
+                        waypoints = self._plan_prm_waypoints(i.x, i.y, o.x, o.y, self.HUMAN_DIAMETER/2 + self.PRM_RADIUS_MARGIN)
+                else:
+                    waypoints = None
+                if waypoints:
+                    i.set_waypoints(waypoints, wp_thresh=self.HUMAN_GOAL_RADIUS)
 
         # complete the crowd formation if all the crowd-forming humans have reached their goals
         if self.crowd_forming:  # enter only when the environment is undergoing a crowd formation
@@ -2433,6 +2452,14 @@ class SocNavEnv_v1(gym.Env):
                     self.upcoming_interaction.set_goal(o.x, o.y)
                     for human in self.upcoming_interaction.humans:
                         self.goals[human.id] = o
+                    if self.USE_PRM_FOR_HUMANS:
+                        waypoints = None
+                        while not waypoints:
+                            waypoints = self._plan_prm_waypoints(self.upcoming_interaction.x, self.upcoming_interaction.y, o.x, o.y, self.HUMAN_DIAMETER/2 + self.PRM_RADIUS_MARGIN)
+                    else:
+                        waypoints = None
+                    if waypoints:
+                        self.upcoming_interaction.set_waypoints(waypoints, wp_thresh=self.HUMAN_GOAL_RADIUS)
                 
                 self.moving_interactions.append(self.upcoming_interaction)
             
@@ -2501,6 +2528,14 @@ class SocNavEnv_v1(gym.Env):
                 # setting the goal for the human
                 self.h_l_forming_human.set_goal(self.upcoming_h_l_interaction.human.x, self.upcoming_h_l_interaction.human.y)
                 self.goals[self.h_l_forming_human.id] = Plant(None, self.upcoming_h_l_interaction.human.x, self.upcoming_h_l_interaction.human.y, self.HUMAN_GOAL_RADIUS)
+                if self.USE_PRM_FOR_HUMANS:
+                    waypoints = None
+                    while not waypoints:
+                        waypoints = self._plan_prm_waypoints(self.h_l_forming_human.x, self.h_l_forming_human.y, self.goals[self.h_l_forming_human.id].x, self.goals[self.h_l_forming_human.id].y, self.HUMAN_DIAMETER/2 + self.PRM_RADIUS_MARGIN)
+                else:
+                    waypoints = None
+                if waypoints:
+                    self.h_l_forming_human.set_waypoints(waypoints, wp_thresh=self.HUMAN_GOAL_RADIUS)
                 # setting the flag variable for human-laptop-interaction formation to be true
                 self.h_l_forming = True
 
@@ -3379,7 +3414,8 @@ class SocNavEnv_v1(gym.Env):
                 "noise": self.INTERACTION_NOISE_VARIANCE, 
                 "can_disperse": can_disperse,
                 "pos_noise_std": self.HUMAN_POS_NOISE_STD,
-                "angle_noise_std": self.HUMAN_ANGLE_NOISE_STD
+                "angle_noise_std": self.HUMAN_ANGLE_NOISE_STD,
+                "draw_waypoints": self.DRAW_HUMAN_WAYPOINTS
             }
         elif object_type == SocNavGymObject.HUMAN_LAPTOP_INTERACTION \
             or object_type == SocNavGymObject.HUMAN_LAPTOP_INTERACTION_NON_DISPERSING:
@@ -3660,7 +3696,12 @@ class SocNavEnv_v1(gym.Env):
             self.goals[human.id] = o
             human.set_goal(o.x, o.y)
             if self.USE_PRM_FOR_HUMANS:
-                waypoints = self._plan_prm_waypoints(human.x, human.y, o.x, o.y, self.HUMAN_DIAMETER/2 + self.PRM_RADIUS_MARGIN, resample=True)
+                waypoints = None
+                while not waypoints:
+                    o = self.sample_goal(self.HUMAN_GOAL_RADIUS, HALF_SIZE_X, HALF_SIZE_Y)
+                    self.goals[human.id] = o
+                    human.set_goal(o.x, o.y)
+                    waypoints = self._plan_prm_waypoints(human.x, human.y, o.x, o.y, self.HUMAN_DIAMETER/2 + self.PRM_RADIUS_MARGIN)
             else:
                 waypoints = None
             if waypoints:
@@ -3688,6 +3729,14 @@ class SocNavEnv_v1(gym.Env):
             for human in i.humans:
                 self.goals[human.id] = o
             i.set_goal(o.x, o.y)
+            if self.USE_PRM_FOR_HUMANS:
+                waypoints = None
+                while not waypoints:
+                    waypoints = self._plan_prm_waypoints(i.x, i.y, o.x, o.y, self.HUMAN_DIAMETER/2 + self.PRM_RADIUS_MARGIN)
+            else:
+                waypoints = None
+            if waypoints:
+                i.set_waypoints(waypoints, wp_thresh=self.HUMAN_GOAL_RADIUS)
 
         self._is_terminated = False
         self._is_truncated = False
@@ -3801,6 +3850,7 @@ class SocNavEnv_v1(gym.Env):
         k = cv2.waitKey(self.MILLISECONDS)
         if k%255 == 27:
             sys.exit(0)
+        return self.world_image
 
     def record(self, path:str):
         """To record the episode 

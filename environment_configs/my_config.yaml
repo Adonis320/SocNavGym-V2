@@ -11,18 +11,21 @@ robot:
     robot_radius: 0.25  # radius of the robot
     goal_radius: 0.35  # radius of the goal
     robot_type: "diff-drive"  # there are two types, diff-drive or holonomic
+    goal_orientation_factor: 2
 
 human:
     human_diameter: 0.72  # diameter of the human
     human_goal_radius: 0.25  # radius of human's goal
-    human_policy: "orca"  # policy of the human. Can be "random", "sfm", or "orca"
+    human_policy: "sfm"  # policy of the human. Can be "random", "sfm", or "orca"
     gaze_angle: 3.14159  # gaze value for humans would be set to 1 when the robot lies between -gaze_angle/2 and +gaze_angle/2
-    fov_angle: 6.2831853  # the frame of view for humans
+    fov_angle: 3.14159  # the frame of view for humans
     prob_to_avoid_robot: 1  # the probability that the human would consider the robot in it's policy
-    use_prm: True  # enable PRM-based waypoint following for humans
+    use_prm: False  # enable PRM-based waypoint following for humans
     prm_radius_margin: 0.0  # extra clearance added to human radius when planning
-    draw_waypoints: False
+    draw_waypoints: True
     prm_max_retries: 1
+    waypoint_switch_radius: 0.25
+
 
 laptop:
     laptop_width: 0.4  # width of the laptop
@@ -67,8 +70,8 @@ env:
     min_static_humans: 0  # minimum no. of static humans
     max_static_humans: 0  # maximum no. of static humans
 
-    min_dynamic_humans: 4  # minimum no. of dynamic humans
-    max_dynamic_humans: 4  # maximum no. of dynamic humans
+    min_dynamic_humans: 5  # minimum no. of dynamic humans
+    max_dynamic_humans: 5  # maximum no. of dynamic humans
 
     min_tables: 0  # minimum no. of tables
     max_tables: 0  # maximum no. of tables  
