@@ -86,7 +86,7 @@ else:
 policy_kwargs = {"net_arch" : net_arch}
 
 device = 'cuda:'+str(args["gpu"]) if torch.cuda.is_available() else 'cpu'
-model = DQN("MultiInputPolicy", env, verbose=0, policy_kwargs=policy_kwargs, device=device)
+model = DQN("MultiInputPolicy", env, verbose=0, policy_kwargs=policy_kwargs, device=device, tensorboard_log="dqn")
 if args["api_key"] is not None:
     callback = CometMLCallback(args["run_name"], args["save_path"], args["project_name"], args["api_key"])
 else:

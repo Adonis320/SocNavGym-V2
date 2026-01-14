@@ -558,6 +558,8 @@ class SocNavEnv_v1(gym.Env):
         
         assert(issubclass(self.reward_class, reward_api_class)), "Please make Reward class a subclass of RewardAPI class"
         self.reward_calculator = self.reward_class(self)
+        self.rng = random.Random(5)
+        self.rng_np = np.random.default_rng(5)
         self.reset()
 
     def process_reward_path(self, path:str):
@@ -577,32 +579,32 @@ class SocNavEnv_v1(gym.Env):
 
     def randomize_params(self):
         """
-        To randomly initialize the number of entities of each type. Specifically, this function would initialize the MAP_SIZE, NUMBER_OF_HUMANS, NUMBER_OF_PLANTS, NUMBER_OF_LAPTOPS and NUMBER_OF_TABLES
+        To self.rngly initialize the number of entities of each type. Specifically, this function would initialize the MAP_SIZE, NUMBER_OF_HUMANS, NUMBER_OF_PLANTS, NUMBER_OF_LAPTOPS and NUMBER_OF_TABLES
         """
-        self.MAP_X = random.uniform(self.MIN_MAP_X, self.MAX_MAP_X)
+        self.MAP_X = self.rng.uniform(self.MIN_MAP_X, self.MAX_MAP_X)
         
         if self.shape == "square" or self.shape == "L":
             self.MAP_Y = self.MAP_X
         else :
-            self.MAP_Y = random.uniform(self.MIN_MAP_Y, self.MAX_MAP_Y)
+            self.MAP_Y = self.rng.uniform(self.MIN_MAP_Y, self.MAX_MAP_Y)
         
-        self.ROBOT_RADIUS = self.INITIAL_ROBOT_RADIUS + random.uniform(-self.ROBOT_RADIUS_MARGIN, self.ROBOT_RADIUS_MARGIN)
-        self.GOAL_RADIUS = self.INITIAL_GOAL_RADIUS + random.uniform(-self.GOAL_RADIUS_MARGIN, self.GOAL_RADIUS_MARGIN)
+        self.ROBOT_RADIUS = self.INITIAL_ROBOT_RADIUS + self.rng.uniform(-self.ROBOT_RADIUS_MARGIN, self.ROBOT_RADIUS_MARGIN)
+        self.GOAL_RADIUS = self.INITIAL_GOAL_RADIUS + self.rng.uniform(-self.GOAL_RADIUS_MARGIN, self.GOAL_RADIUS_MARGIN)
         self.GOAL_THRESHOLD = self.GOAL_RADIUS # + self.ROBOT_RADIUS
-        self.GOAL_ORIENTATION_THRESHOLD = random.uniform(self.MIN_GOAL_ORIENTATION_THRESHOLD, self.MAX_GOAL_ORIENTATION_THRESHOLD)
+        self.GOAL_ORIENTATION_THRESHOLD = self.rng.uniform(self.MIN_GOAL_ORIENTATION_THRESHOLD, self.MAX_GOAL_ORIENTATION_THRESHOLD)
 
         self.RESOLUTION_X = int(1850 * self.MAP_X/(self.MAP_X + self.MAP_Y))
         self.RESOLUTION_Y = int(1850 * self.MAP_Y/(self.MAP_X + self.MAP_Y))
-        self.NUMBER_OF_STATIC_HUMANS = random.randint(self.MIN_STATIC_HUMANS, self.MAX_STATIC_HUMANS)  # number of static humans in the env
-        self.NUMBER_OF_DYNAMIC_HUMANS = random.randint(self.MIN_DYNAMIC_HUMANS, self.MAX_DYNAMIC_HUMANS)  # number of static humans in the env
-        self.NUMBER_OF_PLANTS = random.randint(self.MIN_PLANTS, self.MAX_PLANTS)  # number of plants in the env
-        self.NUMBER_OF_TABLES = random.randint(self.MIN_TABLES, self.MAX_TABLES)  # number of tables in the env
-        self.NUMBER_OF_CHAIRS = random.randint(self.MIN_CHAIRS, self.MAX_CHAIRS)  # number of chairs in the env
-        self.NUMBER_OF_LAPTOPS = random.randint(self.MIN_LAPTOPS, self.MAX_LAPTOPS)  # number of laptops in the env. Laptops will be sampled on tables
-        self.NUMBER_OF_H_H_DYNAMIC_INTERACTIONS = random.randint(self.MIN_H_H_DYNAMIC_INTERACTIONS, self.MAX_H_H_DYNAMIC_INTERACTIONS) # number of dynamic human-human interactions
-        self.NUMBER_OF_H_H_DYNAMIC_INTERACTIONS_NON_DISPERSING = random.randint(self.MIN_H_H_DYNAMIC_INTERACTIONS_NON_DISPERSING, self.MAX_H_H_DYNAMIC_INTERACTIONS_NON_DISPERSING) # number of dynamic human-human interactions that do not disperse
-        self.NUMBER_OF_H_H_STATIC_INTERACTIONS = random.randint(self.MIN_H_H_STATIC_INTERACTIONS, self.MAX_H_H_STATIC_INTERACTIONS) # number of static human-human interactions
-        self.NUMBER_OF_H_H_STATIC_INTERACTIONS_NON_DISPERSING = random.randint(self.MIN_H_H_STATIC_INTERACTIONS_NON_DISPERSING, self.MAX_H_H_STATIC_INTERACTIONS_NON_DISPERSING) # number of static human-human interactions that do not disperse
+        self.NUMBER_OF_STATIC_HUMANS = self.rng.randint(self.MIN_STATIC_HUMANS, self.MAX_STATIC_HUMANS)  # number of static humans in the env
+        self.NUMBER_OF_DYNAMIC_HUMANS = self.rng.randint(self.MIN_DYNAMIC_HUMANS, self.MAX_DYNAMIC_HUMANS)  # number of static humans in the env
+        self.NUMBER_OF_PLANTS = self.rng.randint(self.MIN_PLANTS, self.MAX_PLANTS)  # number of plants in the env
+        self.NUMBER_OF_TABLES = self.rng.randint(self.MIN_TABLES, self.MAX_TABLES)  # number of tables in the env
+        self.NUMBER_OF_CHAIRS = self.rng.randint(self.MIN_CHAIRS, self.MAX_CHAIRS)  # number of chairs in the env
+        self.NUMBER_OF_LAPTOPS = self.rng.randint(self.MIN_LAPTOPS, self.MAX_LAPTOPS)  # number of laptops in the env. Laptops will be sampled on tables
+        self.NUMBER_OF_H_H_DYNAMIC_INTERACTIONS = self.rng.randint(self.MIN_H_H_DYNAMIC_INTERACTIONS, self.MAX_H_H_DYNAMIC_INTERACTIONS) # number of dynamic human-human interactions
+        self.NUMBER_OF_H_H_DYNAMIC_INTERACTIONS_NON_DISPERSING = self.rng.randint(self.MIN_H_H_DYNAMIC_INTERACTIONS_NON_DISPERSING, self.MAX_H_H_DYNAMIC_INTERACTIONS_NON_DISPERSING) # number of dynamic human-human interactions that do not disperse
+        self.NUMBER_OF_H_H_STATIC_INTERACTIONS = self.rng.randint(self.MIN_H_H_STATIC_INTERACTIONS, self.MAX_H_H_STATIC_INTERACTIONS) # number of static human-human interactions
+        self.NUMBER_OF_H_H_STATIC_INTERACTIONS_NON_DISPERSING = self.rng.randint(self.MIN_H_H_STATIC_INTERACTIONS_NON_DISPERSING, self.MAX_H_H_STATIC_INTERACTIONS_NON_DISPERSING) # number of static human-human interactions that do not disperse
         self.humans_in_h_h_dynamic_interactions = []
         self.humans_in_h_h_static_interactions = []
         self.humans_in_h_h_dynamic_interactions_non_dispersing = []
@@ -616,8 +618,8 @@ class SocNavEnv_v1(gym.Env):
         for _ in range(self.NUMBER_OF_H_H_STATIC_INTERACTIONS_NON_DISPERSING):
             self.humans_in_h_h_static_interactions_non_dispersing.append(random.randint(self.MIN_HUMAN_IN_H_H_INTERACTIONS, self.MAX_HUMAN_IN_H_H_INTERACTIONS))
 
-        self.NUMBER_OF_H_L_INTERACTIONS = random.randint(self.MIN_H_L_INTERACTIONS, self.MAX_H_L_INTERACTIONS) # number of human laptop interactions
-        self.NUMBER_OF_H_L_INTERACTIONS_NON_DISPERSING = random.randint(self.MIN_H_L_INTERACTIONS_NON_DISPERSING, self.MAX_H_L_INTERACTIONS_NON_DISPERSING) # number of human laptop interactions that do not disperse
+        self.NUMBER_OF_H_L_INTERACTIONS = self.rng.randint(self.MIN_H_L_INTERACTIONS, self.MAX_H_L_INTERACTIONS) # number of human laptop interactions
+        self.NUMBER_OF_H_L_INTERACTIONS_NON_DISPERSING = self.rng.randint(self.MIN_H_L_INTERACTIONS_NON_DISPERSING, self.MAX_H_L_INTERACTIONS_NON_DISPERSING) # number of human laptop interactions that do not disperse
         self.TOTAL_H_L_INTERACTIONS = self.NUMBER_OF_H_L_INTERACTIONS + self.NUMBER_OF_H_L_INTERACTIONS_NON_DISPERSING
 
         # total humans
@@ -627,24 +629,35 @@ class SocNavEnv_v1(gym.Env):
         for i in self.humans_in_h_h_dynamic_interactions_non_dispersing: self.total_humans += i
         for i in self.humans_in_h_h_static_interactions_non_dispersing: self.total_humans += i
         self.total_humans += self.TOTAL_H_L_INTERACTIONS
-        # randomly select the shape
+        # self.rngly select the shape
         if self.set_shape == "random":
-            self.shape = random.choice(["rectangle", "square", "L"])
+            self.shape = self.rng.choice(["rectangle", "square", "L"])
         else: self.shape = self.set_shape
         
 
         # adding Gaussian Noise to ORCA parameters
-        self.orca_neighborDist = 2*self.HUMAN_DIAMETER + np.random.randn()
-        self.orca_timeHorizon = 5 + np.random.randn()
-        self.orca_timeHorizonObst = 5 + np.random.randn()
-        self.orca_maxSpeed = self.MAX_ADVANCE_HUMAN + np.random.randn()*0.01
+        self.orca_neighborDist = (
+            2 * self.HUMAN_DIAMETER + self.rng_np.normal()
+        )
+
+        self.orca_timeHorizon = (
+            5 + self.rng_np.normal()
+        )
+
+        self.orca_timeHorizonObst = (
+            5 + self.rng_np.normal()
+        )
+
+        self.orca_maxSpeed = (
+            self.MAX_ADVANCE_HUMAN + self.rng_np.normal() * 0.01
+        )
 
         # adding Gaussian Noise to SFM parameters
-        self.sfm_r0 = abs(0.05 + np.random.randn()*0.01)
-        self.sfm_gamma = 0.25 + np.random.randn()*0.01
-        self.sfm_n = 1 + np.random.randn()*0.1
-        self.sfm_n_prime = 1 + np.random.randn()*0.1
-        self.sfm_lambd = 1 + np.random.randn()*0.1
+        self.sfm_r0 = abs(0.05 + self.rng_np.normal() * 0.01)
+        self.sfm_gamma = 0.25 + self.rng_np.normal() * 0.01
+        self.sfm_n = 1 + self.rng_np.normal() * 0.1
+        self.sfm_n_prime = 1 + self.rng_np.normal() * 0.1
+        self.sfm_lambd = 1 + self.rng_np.normal() * 0.1
 
     @property
     def PIXEL_TO_WORLD_X(self):
@@ -1429,7 +1442,7 @@ class SocNavEnv_v1(gym.Env):
 
 
         # adding robot with a probability of avoiding the robot
-        if np.random.random() <= human.prob_to_avoid_robot:
+        if  self.rng_np.random.random() <= human.prob_to_avoid_robot:
             h = sim.addAgent((self.robot.x, self.robot.y))
             # preferred velocity is towards the goal
             pref_vel = np.array([self.robot.goal_x-self.robot.x, self.robot.goal_y-self.robot.y], dtype=np.float32)
@@ -1677,7 +1690,7 @@ class SocNavEnv_v1(gym.Env):
         waypoints = None
         for _ in range(max_retries):
             # use a fresh RNG each attempt to resample different PRM nodes
-            rx, ry = prm_planning(sx, sy, gx, gy, ox, oy, rr, rng=np.random.default_rng())
+            rx, ry = prm_planning(sx, sy, gx, gy, ox, oy, rr, rng= self.rng_np.random.default_rng())
         
             if rx is not None and len(rx) > 0:
                 # planner returns goal->start; reverse to start->goal
@@ -2137,8 +2150,8 @@ class SocNavEnv_v1(gym.Env):
             print(f'cumulative reward: {self.cumulative_reward}')
 
         # dispersing crowds
-        if np.random.random() <= self.CROWD_DISPERSAL_PROBABILITY:
-            t = np.random.randint(0, 2)
+        if  self.rng_np.random() <= self.CROWD_DISPERSAL_PROBABILITY:
+            t =  self.rng_np.randint(0, 2)
             self.dispersable_moving_crowd_indices = []
             self.dispersable_static_crowd_indices = []
 
@@ -2151,11 +2164,11 @@ class SocNavEnv_v1(gym.Env):
                     self.dispersable_static_crowd_indices.append(ind)
 
             if t == 0 and len(self.dispersable_static_crowd_indices) > 0:
-                index = random.choice(self.dispersable_static_crowd_indices)
+                index = self.rng.choice(self.dispersable_static_crowd_indices)
                 self.disperse_static_crowd(index)
             
             elif t == 1 and len(self.dispersable_moving_crowd_indices) > 0:
-                index = random.choice(self.dispersable_moving_crowd_indices)
+                index = self.rng.choice(self.dispersable_moving_crowd_indices)
                 self.disperse_moving_crowd(index)
         
         # disperse human-laptop
@@ -2164,15 +2177,15 @@ class SocNavEnv_v1(gym.Env):
             if i.can_disperse:
                 self.dispersable_h_l_interaction_indices.append(ind)
         
-        if np.random.random() <= self.HUMAN_LAPTOP_DISPERSAL_PROBABILITY and len(self.dispersable_h_l_interaction_indices) > 0:
-            index = random.choice(self.dispersable_h_l_interaction_indices)
+        if  self.rng_np.random() <= self.HUMAN_LAPTOP_DISPERSAL_PROBABILITY and len(self.dispersable_h_l_interaction_indices) > 0:
+            index = self.rng.choice(self.dispersable_h_l_interaction_indices)
             self.disperse_human_laptop(index)
 
         # forming interactions
-        if np.random.random() <= self.CROWD_FORMATION_PROBABILITY and not self.crowd_forming and not self.h_l_forming:
+        if  self.rng_np.random() <= self.CROWD_FORMATION_PROBABILITY and not self.crowd_forming and not self.h_l_forming:
             self.form_human_crowd()  # form a new human crowd
         
-        if np.random.random() <= self.HUMAN_LAPTOP_FORMATION_PROBABILITY and not self.crowd_forming and not self.h_l_forming:
+        if  self.rng_np.random() <= self.HUMAN_LAPTOP_FORMATION_PROBABILITY and not self.crowd_forming and not self.h_l_forming:
             self.form_human_laptop_interaction()  # form a new human-laptop interaction
 
         return observation, reward, terminated, truncated, info
@@ -2191,8 +2204,8 @@ class SocNavEnv_v1(gym.Env):
                 break
             goal = Plant(
                 id=None,
-                x = random.uniform(-HALF_SIZE_X, HALF_SIZE_X),
-                y = random.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
+                x = self.rng.uniform(-HALF_SIZE_X, HALF_SIZE_X),
+                y = self.rng.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
                 radius=goal_radius
             )
             
@@ -2223,8 +2236,8 @@ class SocNavEnv_v1(gym.Env):
 
         # add the humans from the interaction into the human list
         for human in interaction.humans:
-            # randomly set the human to static or dynamic
-            if (np.random.random() < 0.5): 
+            # self.rngly set the human to static or dynamic
+            if ( self.rng_np.random.random() < 0.5): 
                 human.type="static"  # default is dynamic
                 static_human_count += 1
 
@@ -2280,8 +2293,8 @@ class SocNavEnv_v1(gym.Env):
 
         # add the humans from the interaction into the human list
         for human in interaction.humans:
-            # randomly set the human to static or dynamic
-            if (np.random.random() < 0.5): 
+            # self.rngly set the human to static or dynamic
+            if ( self.rng_np.random.random() < 0.5): 
                 human.type="static"  # default is dynamic
                 static_humans.append(human)
             else:
@@ -2304,8 +2317,8 @@ class SocNavEnv_v1(gym.Env):
                 human.speed = 0
                 interaction.humans.append(human)
             
-            # randomly make this interaction static
-            if np.random.random() <= 0.5:
+            # self.rngly make this interaction static
+            if  self.rng_np.random.random() <= 0.5:
                 self.moving_interactions.pop(index)
                 interaction.type = "stationary"
                 for human in interaction.humans:
@@ -2352,7 +2365,7 @@ class SocNavEnv_v1(gym.Env):
     def form_human_crowd(self):
         """Initiates the process of crowd formation
         """
-        numHumans = random.randint(self.MIN_HUMAN_IN_H_H_INTERACTIONS, self.MAX_HUMAN_IN_H_H_INTERACTIONS)
+        numHumans = self.rng.randint(self.MIN_HUMAN_IN_H_H_INTERACTIONS, self.MAX_HUMAN_IN_H_H_INTERACTIONS)
         if numHumans <= 1: # cannot form a crowd with one or less humans
             pass
         else:
@@ -2361,14 +2374,14 @@ class SocNavEnv_v1(gym.Env):
                 pass
             else:
                 start_time = time.time()  # for timeout purposes, recording the time
-                indices = random.sample(range(len(self.dynamic_humans)), numHumans)  # randomly sample a few humans from the list of moving humans
+                indices = self.rng.sample(range(len(self.dynamic_humans)), numHumans)  # self.rngly sample a few humans from the list of moving humans
                 HALF_SIZE_X = self.MAP_X/2. - self.MARGIN
                 HALF_SIZE_Y = self.MAP_Y/2. - self.MARGIN
                 while True: # comes out of loop only when spawned object collides with none of current objects
                     if self.check_timeout(start_time, period=0.5):  # times out if a crowd location cannot be found in 0.5 seconds. Such a small period is set so that it does not interrupt the normal flow of the environment unnecessarily trying to form a crowd
                         break
-                    x = random.uniform(-HALF_SIZE_X, HALF_SIZE_X)
-                    y = random.uniform(-HALF_SIZE_Y, HALF_SIZE_Y)
+                    x = self.rng.uniform(-HALF_SIZE_X, HALF_SIZE_X)
+                    y = self.rng.uniform(-HALF_SIZE_Y, HALF_SIZE_Y)
                     i = Human_Human_Interaction(
                         x, y, "stationary", numHumans, self.INTERACTION_RADIUS, self.HUMAN_DIAMETER, self.MAX_ADVANCE_HUMAN, self.INTERACTION_GOAL_RADIUS, self.INTERACTION_NOISE_VARIANCE
                     )
@@ -2438,8 +2451,8 @@ class SocNavEnv_v1(gym.Env):
             
             assert(len(self.dynamic_humans) + count == l)  # sanity check
             self.upcoming_interaction.arrange_humans()  # arrange the humans properly
-            # randomly make the crowd static or moving
-            if random.random() < 0.5:
+            # self.rngly make the crowd static or moving
+            if self.rng.random() < 0.5:
                 self.upcoming_interaction.type = "moving"
 
             if self.upcoming_interaction.type == "moving":
@@ -2503,8 +2516,8 @@ class SocNavEnv_v1(gym.Env):
         if len(self.laptops) == 0 or len(self.dynamic_humans) == 0:  # if no empty laptop, or no free moving human, do nothing
             pass
         else:
-            index = random.sample(range(len(self.dynamic_humans)), 1)[0]  # sampling a random human 
-            laptop_index = random.sample(range(len(self.laptops)), 1)[0]  # sampling a random laptop
+            index = self.rng.sample(range(len(self.dynamic_humans)), 1)[0]  # sampling a self.rng human 
+            laptop_index = self.rng.sample(range(len(self.laptops)), 1)[0]  # sampling a self.rng laptop
             self.h_l_forming_human = self.dynamic_humans[index]
             self.h_l_forming_human.policy = 'orca'  # using orca policy seems to work better
 
@@ -3115,9 +3128,9 @@ class SocNavEnv_v1(gym.Env):
         """
         if location == 0:
             min_gap = max(self.ROBOT_RADIUS*2, self.HUMAN_DIAMETER) * 4 + 0.5
-            gap1 = random.random() * min_gap + min_gap  # gap1 is sampled between min_gap and 2*min_gap
-            gap2 = random.random() * min_gap + min_gap  # gap2 is sampled between min_gap and 2*min_gap
-            gap1_center = random.random() * (self.MAP_X - gap1 - self.L_X) + (-self.MAP_X/2 + gap1/2)  # center of gap1 is sampled between (-X/2 + gap1/2, X/2 - LX - gap1/2)
+            gap1 = self.rng.random() * min_gap + min_gap  # gap1 is sampled between min_gap and 2*min_gap
+            gap2 = self.rng.random() * min_gap + min_gap  # gap2 is sampled between min_gap and 2*min_gap
+            gap1_center = self.rng.random() * (self.MAP_X - gap1 - self.L_X) + (-self.MAP_X/2 + gap1/2)  # center of gap1 is sampled between (-X/2 + gap1/2, X/2 - LX - gap1/2)
             w1 = Wall(None, ((-self.MAP_X/2 + gap1_center-gap1/2)/2), self.MAP_Y/2 - self.L_Y, 0, (gap1_center-gap1/2 + self.MAP_X/2), self.WALL_THICKNESS)
             w2 = Wall(None, (gap1_center + gap1/2 + self.MAP_X/2 - self.L_X)/2, self.MAP_Y/2 - self.L_Y, 0, (self.MAP_X/2 - self.L_X - (gap1_center + gap1/2)), self.WALL_THICKNESS)
             self.walls.append(w1)
@@ -3125,7 +3138,7 @@ class SocNavEnv_v1(gym.Env):
             self.walls.append(w2)
             self.objects.append(w2)
             self.objects.append(Wall(-1, gap1_center, -self.MAP_Y/2 - self.L_Y, 0, gap1, self.WALL_THICKNESS))  # adding this bit so that no obstacles are sampled in the gap
-            gap2_center = random.random() * (self.MAP_Y - gap2 - self.L_Y) + (-self.MAP_Y/2 + gap2/2)  # center of gap2 is sampled between (-Y/2 + gap2/2, Y/2 - LY - gap2/2)
+            gap2_center = self.rng.random() * (self.MAP_Y - gap2 - self.L_Y) + (-self.MAP_Y/2 + gap2/2)  # center of gap2 is sampled between (-Y/2 + gap2/2, Y/2 - LY - gap2/2)
             w3 = Wall(None, self.MAP_X/2 - self.L_X, (-self.MAP_Y/2 + gap2_center-gap2/2)/2, np.pi/2, (gap2_center-gap2/2 + self.MAP_Y/2), self.WALL_THICKNESS)
             w4 = Wall(None, self.MAP_X/2 - self.L_X, (gap2_center + gap2/2 + self.MAP_Y/2 - self.L_Y)/2, np.pi/2, (self.MAP_Y/2 - self.L_Y - (gap2_center + gap2/2)), self.WALL_THICKNESS)
             self.walls.append(w3)
@@ -3136,9 +3149,9 @@ class SocNavEnv_v1(gym.Env):
         
         elif location == 1:
             min_gap = max(self.ROBOT_RADIUS*2, self.HUMAN_DIAMETER) + 0.5
-            gap1 = random.random() * min_gap + min_gap  # gap1 is sampled between min_gap and 2*min_gap
-            gap2 = random.random() * min_gap + min_gap  # gap2 is sampled between min_gap and 2*min_gap
-            gap1_center = random.random() * (self.MAP_X - gap1 - self.L_X) + (-self.MAP_X/2 + self.L_X + gap1/2)  # center of gap1 is sampled between (-X/2 + LX + gap1/2, X/2 - gap1/2)
+            gap1 = self.rng.random() * min_gap + min_gap  # gap1 is sampled between min_gap and 2*min_gap
+            gap2 = self.rng.random() * min_gap + min_gap  # gap2 is sampled between min_gap and 2*min_gap
+            gap1_center = self.rng.random() * (self.MAP_X - gap1 - self.L_X) + (-self.MAP_X/2 + self.L_X + gap1/2)  # center of gap1 is sampled between (-X/2 + LX + gap1/2, X/2 - gap1/2)
             w1 = Wall(None, ((-self.MAP_X/2 + self.L_X + gap1_center-gap1/2)/2), self.MAP_Y/2 - self.L_Y, 0, (gap1_center-gap1/2 + self.MAP_X/2 - self.L_X), self.WALL_THICKNESS)
             w2 = Wall(None, (gap1_center + gap1/2 + self.MAP_X/2)/2, self.MAP_Y/2 - self.L_Y, 0, (self.MAP_X/2 - (gap1_center + gap1/2)), self.WALL_THICKNESS)
             self.walls.append(w1)
@@ -3146,7 +3159,7 @@ class SocNavEnv_v1(gym.Env):
             self.walls.append(w2)
             self.objects.append(w2)
             self.objects.append(Wall(-1, gap1_center, -self.MAP_Y/2 - self.L_Y, 0, gap1, self.WALL_THICKNESS))  # adding this bit so that no obstacles are sampled in the gap
-            gap2_center = random.random() * (self.MAP_Y - gap2 - self.L_Y) + (-self.MAP_Y/2 + gap2/2)  # center of gap2 is sampled between (-Y/2 + gap2/2, Y/2 - LY - gap2/2)
+            gap2_center = self.rng.random() * (self.MAP_Y - gap2 - self.L_Y) + (-self.MAP_Y/2 + gap2/2)  # center of gap2 is sampled between (-Y/2 + gap2/2, Y/2 - LY - gap2/2)
             w3 = Wall(None, -self.MAP_X/2 + self.L_X, (-self.MAP_Y/2 + gap2_center-gap2/2)/2, np.pi/2, (gap2_center-gap2/2 + self.MAP_Y/2), self.WALL_THICKNESS)
             w4 = Wall(None, -self.MAP_X/2 + self.L_X, (gap2_center + gap2/2 + self.MAP_Y/2 - self.L_Y)/2, np.pi/2, (self.MAP_Y/2 - self.L_Y - (gap2_center + gap2/2)), self.WALL_THICKNESS)
             self.walls.append(w3)
@@ -3157,9 +3170,9 @@ class SocNavEnv_v1(gym.Env):
         
         elif location == 2:
             min_gap = max(self.ROBOT_RADIUS*2, self.HUMAN_DIAMETER) + 0.5
-            gap1 = random.random() * min_gap + min_gap  # gap1 is sampled between min_gap and 2*min_gap
-            gap2 = random.random() * min_gap + min_gap  # gap2 is sampled between min_gap and 2*min_gap
-            gap1_center = random.random() * (self.MAP_X - gap1 - self.L_X) + (-self.MAP_X/2 + gap1/2)  # center of gap1 is sampled between (-X/2 + gap1/2, X/2 - LX - gap1/2)
+            gap1 = self.rng.random() * min_gap + min_gap  # gap1 is sampled between min_gap and 2*min_gap
+            gap2 = self.rng.random() * min_gap + min_gap  # gap2 is sampled between min_gap and 2*min_gap
+            gap1_center = self.rng.random() * (self.MAP_X - gap1 - self.L_X) + (-self.MAP_X/2 + gap1/2)  # center of gap1 is sampled between (-X/2 + gap1/2, X/2 - LX - gap1/2)
             w1 = Wall(None, ((-self.MAP_X/2 + gap1_center-gap1/2)/2), -self.MAP_Y/2 + self.L_Y, 0, (gap1_center-gap1/2 + self.MAP_X/2), self.WALL_THICKNESS)
             w2 = Wall(None, (gap1_center + gap1/2 + self.MAP_X/2 - self.L_X)/2, -self.MAP_Y/2 + self.L_Y, 0, (self.MAP_X/2 - self.L_X - (gap1_center + gap1/2)), self.WALL_THICKNESS)
             self.walls.append(w1)
@@ -3167,7 +3180,7 @@ class SocNavEnv_v1(gym.Env):
             self.walls.append(w2)
             self.objects.append(w2)
             self.objects.append(Wall(-1, gap1_center, -self.MAP_Y/2 + self.L_Y, 0, gap1, self.WALL_THICKNESS))  # adding this bit so that no obstacles are sampled in the gap
-            gap2_center = random.random() * (self.MAP_Y - gap2 - self.L_Y) + (-self.MAP_Y/2 + gap2/2 + self.L_Y)  # center of gap2 is sampled between (-Y/2 + gap2/2 + LY, Y/2 - gap2/2)
+            gap2_center = self.rng.random() * (self.MAP_Y - gap2 - self.L_Y) + (-self.MAP_Y/2 + gap2/2 + self.L_Y)  # center of gap2 is sampled between (-Y/2 + gap2/2 + LY, Y/2 - gap2/2)
             w3 = Wall(None, self.MAP_X/2 - self.L_X, (-self.MAP_Y/2 + self.L_Y + gap2_center-gap2/2)/2, np.pi/2, (gap2_center-gap2/2 + self.MAP_Y/2 - self.L_Y), self.WALL_THICKNESS)
             w4 = Wall(None, self.MAP_X/2 - self.L_X, (gap2_center + gap2/2 + self.MAP_Y/2)/2, np.pi/2, (self.MAP_Y/2 - (gap2_center + gap2/2)), self.WALL_THICKNESS)
             self.walls.append(w3)
@@ -3178,9 +3191,9 @@ class SocNavEnv_v1(gym.Env):
 
         elif location == 3:
             min_gap = max(self.ROBOT_RADIUS*2, self.HUMAN_DIAMETER) + 0.5
-            gap1 = random.random() * min_gap + min_gap  # gap1 is sampled between min_gap and 2*min_gap
-            gap2 = random.random() * min_gap + min_gap  # gap2 is sampled between min_gap and 2*min_gap
-            gap1_center = random.random() * (self.MAP_X - gap1 - self.L_X) + (-self.MAP_X/2 + self.L_X + gap1/2)  # center of gap1 is sampled between (-X/2 + LX + gap1/2, X/2 - gap1/2)
+            gap1 = self.rng.random() * min_gap + min_gap  # gap1 is sampled between min_gap and 2*min_gap
+            gap2 = self.rng.random() * min_gap + min_gap  # gap2 is sampled between min_gap and 2*min_gap
+            gap1_center = self.rng.random() * (self.MAP_X - gap1 - self.L_X) + (-self.MAP_X/2 + self.L_X + gap1/2)  # center of gap1 is sampled between (-X/2 + LX + gap1/2, X/2 - gap1/2)
             w1 = Wall(None, ((-self.MAP_X/2 + self.L_X + gap1_center-gap1/2)/2), -self.MAP_Y/2 + self.L_Y, 0, (gap1_center-gap1/2 + self.MAP_X/2 - self.L_X), self.WALL_THICKNESS)
             w2 = Wall(None, (gap1_center + gap1/2 + self.MAP_X/2)/2, -self.MAP_Y/2 + self.L_Y, 0, (self.MAP_X/2 - (gap1_center + gap1/2)), self.WALL_THICKNESS)
             self.walls.append(w1)
@@ -3188,7 +3201,7 @@ class SocNavEnv_v1(gym.Env):
             self.walls.append(w2)
             self.objects.append(w2)
             self.objects.append(Wall(-1, gap1_center, -self.MAP_Y/2 + self.L_Y, 0, gap1, self.WALL_THICKNESS))  # adding this bit so that no obstacles are sampled in the gap
-            gap2_center = random.random() * (self.MAP_Y - gap2 - self.L_Y) + (-self.MAP_Y/2 + gap2/2 + self.L_Y)  # center of gap2 is sampled between (-Y/2 + gap2/2 + LY, Y/2 - gap2/2)
+            gap2_center = self.rng.random() * (self.MAP_Y - gap2 - self.L_Y) + (-self.MAP_Y/2 + gap2/2 + self.L_Y)  # center of gap2 is sampled between (-Y/2 + gap2/2 + LY, Y/2 - gap2/2)
             w3 = Wall(None, -self.MAP_X/2 + self.L_X, (-self.MAP_Y/2 + self.L_Y + gap2_center-gap2/2)/2, np.pi/2, (gap2_center-gap2/2 + self.MAP_Y/2 - self.L_Y), self.WALL_THICKNESS)
             w4 = Wall(None, -self.MAP_X/2 + self.L_X, (gap2_center + gap2/2 + self.MAP_Y/2)/2, np.pi/2, (self.MAP_Y/2 - (gap2_center + gap2/2)), self.WALL_THICKNESS)
             self.walls.append(w3)
@@ -3201,9 +3214,9 @@ class SocNavEnv_v1(gym.Env):
         """Adds corridors to an rectangular/square shaped room
         """
         min_gap = max(self.ROBOT_RADIUS*2, self.HUMAN_DIAMETER) + 0.5
-        gap1 = random.random() * min_gap + min_gap  # gap1 is sampled between min_gap and 2*min_gap
-        gap2 = random.random() * min_gap + min_gap  # gap2 is sampled between min_gap and 2*min_gap
-        gap1_center = random.random() * (self.MAP_X/2 - gap1/2)  # center of gap1 is sampled between (-X/2 + gap1/2, X/2 - gap1/2)
+        gap1 = self.rng.random() * min_gap + min_gap  # gap1 is sampled between min_gap and 2*min_gap
+        gap2 = self.rng.random() * min_gap + min_gap  # gap2 is sampled between min_gap and 2*min_gap
+        gap1_center = self.rng.random() * (self.MAP_X/2 - gap1/2)  # center of gap1 is sampled between (-X/2 + gap1/2, X/2 - gap1/2)
         w1 = Wall(None, ((-self.MAP_X/2 + gap1_center-gap1/2)/2), -self.MAP_Y/2 + self.MAP_Y/3, 0, (gap1_center-gap1/2 + self.MAP_X/2), self.WALL_THICKNESS)
         w2 = Wall(None, (gap1_center + gap1/2 + self.MAP_X/2)/2, -self.MAP_Y/2 + self.MAP_Y/3, 0, (self.MAP_X/2 - (gap1_center + gap1/2)), self.WALL_THICKNESS)
         self.walls.append(w1)
@@ -3211,7 +3224,7 @@ class SocNavEnv_v1(gym.Env):
         self.walls.append(w2)
         self.objects.append(w2)
         self.objects.append(Wall(-1, gap1_center, -self.MAP_Y/2 + self.MAP_Y/3, 0, gap1, self.WALL_THICKNESS))  # adding this bit so that no obstacles are sampled in the gap
-        gap2_center = random.random() * (self.MAP_X/2 - gap2/2)  # center of gap2 is sampled between (-X/2 + gap2/2, X/2 - gap2/2)
+        gap2_center = self.rng.random() * (self.MAP_X/2 - gap2/2)  # center of gap2 is sampled between (-X/2 + gap2/2, X/2 - gap2/2)
         w3 = Wall(None, ((-self.MAP_X/2 + gap2_center-gap2/2)/2), -self.MAP_Y/2 + 2*self.MAP_Y/3, 0, (gap2_center-gap2/2 + self.MAP_X/2), self.WALL_THICKNESS)
         w4 = Wall(None, (gap2_center + gap2/2 + self.MAP_X/2)/2, -self.MAP_Y/2 + 2*self.MAP_Y/3, 0, (self.MAP_X/2 - (gap2_center + gap2/2)), self.WALL_THICKNESS)
         self.walls.append(w3)
@@ -3224,7 +3237,7 @@ class SocNavEnv_v1(gym.Env):
     def _add_walls(self):
         if self.shape == "L":
             # keep the direction of this as well
-            self.location = np.random.randint(0,4)
+            self.location =  self.rng_np.random.randint(0,4)
             self.L_X = (2 if (self.location == 0 or self.location == 3) else 1) * self.MAP_X/3
             self.L_Y = (1 if (self.location == 0 or self.location == 3) else 2) * self.MAP_Y/3
 
@@ -3277,9 +3290,9 @@ class SocNavEnv_v1(gym.Env):
         if object_type == SocNavGymObject.ROBOT:
             arg_dict = {
                 "id": 0,  # robot is assigned id 0
-                "x": random.uniform(-HALF_SIZE_X, HALF_SIZE_X),
-                "y": random.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
-                "theta": random.uniform(-np.pi, np.pi),
+                "x": self.rng.uniform(-HALF_SIZE_X, HALF_SIZE_X),
+                "y": self.rng.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
+                "theta": self.rng.uniform(-np.pi, np.pi),
                 "radius": self.ROBOT_RADIUS,
                 "goal_x": None,
                 "goal_y": None,
@@ -3288,17 +3301,17 @@ class SocNavEnv_v1(gym.Env):
             }
         elif object_type == SocNavGymObject.STATIC_HUMAN or object_type == SocNavGymObject.DYNAMIC_HUMAN:
             policy = self.HUMAN_POLICY
-            if policy == "random": policy = random.choice(["sfm", "orca"])
+            if policy == "random": policy = self.rng.choice(["sfm", "orca"])
             human_speed = 0
             human_type = "static"
             if object_type == SocNavGymObject.DYNAMIC_HUMAN:
-                human_speed = random.uniform(0.0, self.MAX_ADVANCE_HUMAN)
+                human_speed = self.rng.uniform(0.0, self.MAX_ADVANCE_HUMAN)
                 human_type = "dynamic"
             arg_dict = {
                 "id": self.id,
-                "x": random.uniform(-HALF_SIZE_X, HALF_SIZE_X),
-                "y": random.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
-                "theta": random.uniform(-np.pi, np.pi),
+                "x": self.rng.uniform(-HALF_SIZE_X, HALF_SIZE_X),
+                "y": self.rng.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
+                "theta": self.rng.uniform(-np.pi, np.pi),
                 "width": self.HUMAN_DIAMETER,
                 "speed": human_speed,
                 "goal_radius": self.HUMAN_GOAL_RADIUS,
@@ -3315,35 +3328,35 @@ class SocNavEnv_v1(gym.Env):
         elif object_type == SocNavGymObject.PLANT:
             arg_dict = {
                 "id": self.id,
-                "x": random.uniform(-HALF_SIZE_X, HALF_SIZE_X),
-                "y": random.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
-                "radius": self.PLANT_RADIUS + + random.uniform(-self.PLANT_RADIUS_MARGIN, self.PLANT_RADIUS_MARGIN)
+                "x": self.rng.uniform(-HALF_SIZE_X, HALF_SIZE_X),
+                "y": self.rng.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
+                "radius": self.PLANT_RADIUS + + self.rng.uniform(-self.PLANT_RADIUS_MARGIN, self.PLANT_RADIUS_MARGIN)
             }
         elif object_type == SocNavGymObject.TABLE:
             arg_dict = {
                 "id": self.id,
-                "x": random.uniform(-HALF_SIZE_X, HALF_SIZE_X),
-                "y": random.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
-                "theta": random.uniform(-np.pi, np.pi),
-                "width": self.TABLE_WIDTH + random.uniform(-self.TABLE_WIDTH_MARGIN, self.TABLE_WIDTH_MARGIN),
-                "length": self.TABLE_LENGTH + random.uniform(-self.TABLE_LENGTH_MARGIN, self.TABLE_LENGTH_MARGIN)
+                "x": self.rng.uniform(-HALF_SIZE_X, HALF_SIZE_X),
+                "y": self.rng.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
+                "theta": self.rng.uniform(-np.pi, np.pi),
+                "width": self.TABLE_WIDTH + self.rng.uniform(-self.TABLE_WIDTH_MARGIN, self.TABLE_WIDTH_MARGIN),
+                "length": self.TABLE_LENGTH + self.rng.uniform(-self.TABLE_LENGTH_MARGIN, self.TABLE_LENGTH_MARGIN)
             }
         elif object_type == SocNavGymObject.CHAIR:
             arg_dict = {
                 "id": self.id,
-                "x": random.uniform(-HALF_SIZE_X, HALF_SIZE_X),
-                "y": random.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
-                "theta": random.uniform(-np.pi, np.pi),
-                "width": self.CHAIR_WIDTH + random.uniform(-self.CHAIR_WIDTH_MARGIN, self.CHAIR_WIDTH_MARGIN),
-                "length": self.CHAIR_LENGTH + random.uniform(-self.CHAIR_LENGTH_MARGIN, self.CHAIR_LENGTH_MARGIN)
+                "x": self.rng.uniform(-HALF_SIZE_X, HALF_SIZE_X),
+                "y": self.rng.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
+                "theta": self.rng.uniform(-np.pi, np.pi),
+                "width": self.CHAIR_WIDTH + self.rng.uniform(-self.CHAIR_WIDTH_MARGIN, self.CHAIR_WIDTH_MARGIN),
+                "length": self.CHAIR_LENGTH + self.rng.uniform(-self.CHAIR_LENGTH_MARGIN, self.CHAIR_LENGTH_MARGIN)
             }
         elif object_type == SocNavGymObject.LAPTOP:
-            # pick a random table
-            i = random.randint(0, len(self.tables)-1)
+            # pick a self.rng table
+            i = self.rng.randint(0, len(self.tables)-1)
             table = self.tables[i]
             
-            # pick a random edge
-            edge = np.random.randint(0, 4)
+            # pick a self.rng edge
+            edge =  self.rng_np.random.randint(0, 4)
             if edge == 0:
                 center = (
                     table.x + np.cos(table.orientation + np.pi/2) * (table.width-self.LAPTOP_WIDTH)/2, 
@@ -3403,8 +3416,8 @@ class SocNavEnv_v1(gym.Env):
                 can_disperse = False
             index = extra_info["index"]
             arg_dict = {
-                "x": random.uniform(-HALF_SIZE_X, HALF_SIZE_X), 
-                "y": random.uniform(-HALF_SIZE_Y, HALF_SIZE_Y), 
+                "x": self.rng.uniform(-HALF_SIZE_X, HALF_SIZE_X), 
+                "y": self.rng.uniform(-HALF_SIZE_Y, HALF_SIZE_Y), 
                 "type": interaction_type, 
                 "numOfHumans": human_list[index], 
                 "radius": self.INTERACTION_RADIUS, 
@@ -3501,10 +3514,15 @@ class SocNavEnv_v1(gym.Env):
 
         # setting seed
         if seed is not None:
-            random.seed(seed)
-            np.random.seed(seed)
+            self.rng = random.Random(seed)
+            self.rng_np = np.random.default_rng(seed)
+            #random.seed(seed)
+            # self.rng_np.random.seed(seed)
+            #self.rng = random.Random(seed)
+            #self.rng_np = np.random.default_rng(seed)
 
-        # randomly initialize the parameters 
+
+        # self.rngly initialize the parameters 
         self.randomize_params()
         self.id = 1
 
@@ -3563,7 +3581,7 @@ class SocNavEnv_v1(gym.Env):
         self.goals[self.robot.id] = robot_goal
         self.robot.goal_x = robot_goal.x
         self.robot.goal_y = robot_goal.y
-        self.robot.goal_a = random.uniform(-np.pi, np.pi)
+        self.robot.goal_a = self.rng.uniform(-np.pi, np.pi)
         self.robot_orca.goal_x = robot_goal.x
         self.robot_orca.goal_y = robot_goal.y
         self.robot_orca.goal_a = self.robot.goal_a
