@@ -726,18 +726,18 @@ class SocNavEnv_v1(gym.Env):
 
             )
 
-        if not self.get_padded_observations:
-            total_segments = 0
-            for w in self.walls:
-                total_segments += w.length//self.WALL_SEGMENT_SIZE
-                if w.length % self.WALL_SEGMENT_SIZE != 0: total_segments += 1
-            if self.is_entity_present["walls"]:
-                d["walls"] = spaces.Box(
-                    low=np.array([0, 0, 0, 0, 0, 0, -self.MAP_X * np.sqrt(2), -self.MAP_Y * np.sqrt(2), -1.0, -1.0, -self.WALL_SEGMENT_SIZE, -(self.MAX_ADVANCE_ROBOT)*np.sqrt(2), -self.MAX_ROTATION, 0] * int(total_segments), dtype=np.float32),
-                    high=np.array([1, 1, 1, 1, 1, 1, +self.MAP_X * np.sqrt(2), +self.MAP_Y * np.sqrt(2), 1.0, 1.0, +self.WALL_SEGMENT_SIZE, +(self.MAX_ADVANCE_ROBOT)*np.sqrt(2), +self.MAX_ROTATION, 1] * int(total_segments), dtype=np.float32),
-                    shape=(((self.robot.one_hot_encoding.shape[0] + 8)*int(total_segments),)),
-                    dtype=np.float32
-                )
+        #if not self.get_padded_observations:
+        #   total_segments = 0
+        #    for w in self.walls:
+        #        total_segments += w.length//self.WALL_SEGMENT_SIZE
+        #        if w.length % self.WALL_SEGMENT_SIZE != 0: total_segments += 1
+        #    if self.is_entity_present["walls"]:
+        #        d["walls"] = spaces.Box(
+        #            low=np.array([0, 0, 0, 0, 0, 0, -self.MAP_X * np.sqrt(2), -self.MAP_Y * np.sqrt(2), -1.0, -1.0, -self.WALL_SEGMENT_SIZE, -(self.MAX_ADVANCE_ROBOT)*np.sqrt(2), -self.MAX_ROTATION, 0] * int(total_segments), dtype=np.float32),
+        #            high=np.array([1, 1, 1, 1, 1, 1, +self.MAP_X * np.sqrt(2), +self.MAP_Y * np.sqrt(2), 1.0, 1.0, +self.WALL_SEGMENT_SIZE, +(self.MAX_ADVANCE_ROBOT)*np.sqrt(2), +self.MAX_ROTATION, 1] * int(total_segments), dtype=np.float32),
+        #            shape=(((self.robot.one_hot_encoding.shape[0] + 8)*int(total_segments),)),
+        #            dtype=np.float32
+        #        )
 
         return spaces.Dict(d)
 
@@ -1050,8 +1050,8 @@ class SocNavEnv_v1(gym.Env):
         relative_speeds = np.array([-np.sqrt(self.robot.vel_x**2 + self.robot.vel_y**2), -self.robot.vel_a], dtype=np.float32)
         
         if object.name == "human": # the only dynamic object
-            if object.type == "static":
-                assert object.speed <= 0.001, "static human has speed" 
+            #if object.type == "static":
+                #assert object.speed <= 0.001, "static human has speed" 
             # relative linear speed
             relative_speeds[0] = np.sqrt((object.speed*np.cos(object.orientation) - robot_vel_x)**2 + (object.speed*np.sin(object.orientation) - robot_vel_y)**2) 
             relative_speeds[1] = (np.arctan2(np.sin(object.orientation - self.robot.orientation), np.cos(object.orientation - self.robot.orientation)) - self._prev_observations[object.id].theta) / self.TIMESTEP
@@ -1193,13 +1193,13 @@ class SocNavEnv_v1(gym.Env):
             d["plants"] = plant_obs
 
         # inserting wall observations to the dictionary
-        if not self.get_padded_observations:
-            wall_obs = np.array([], dtype=np.float32)
-            for wall in self.walls:
-                obs = self._get_entity_obs(wall)
-                wall_obs = np.concatenate((wall_obs, obs), dtype=np.float32)
-            if self.is_entity_present["walls"]:
-                d["walls"] = wall_obs
+        #if not self.get_padded_observations:
+        #    wall_obs = np.array([], dtype=np.float32)
+        #    for wall in self.walls:
+        #        obs = self._get_entity_obs(wall)
+        #        wall_obs = np.concatenate((wall_obs, obs), dtype=np.float32)
+        #    if self.is_entity_present["walls"]:
+        #        d["walls"] = wall_obs
 
         return d
     
@@ -1442,7 +1442,7 @@ class SocNavEnv_v1(gym.Env):
 
 
         # adding robot with a probability of avoiding the robot
-        if  self.rng_np.random.random() <= human.prob_to_avoid_robot:
+        if  self.rng_np.random() <= human.prob_to_avoid_robot:
             h = sim.addAgent((self.robot.x, self.robot.y))
             # preferred velocity is towards the goal
             pref_vel = np.array([self.robot.goal_x-self.robot.x, self.robot.goal_y-self.robot.y], dtype=np.float32)
@@ -2151,7 +2151,7 @@ class SocNavEnv_v1(gym.Env):
 
         # dispersing crowds
         if  self.rng_np.random() <= self.CROWD_DISPERSAL_PROBABILITY:
-            t =  self.rng_np.randint(0, 2)
+            t =  self.rng.randint(0, 2)
             self.dispersable_moving_crowd_indices = []
             self.dispersable_static_crowd_indices = []
 
@@ -2237,7 +2237,7 @@ class SocNavEnv_v1(gym.Env):
         # add the humans from the interaction into the human list
         for human in interaction.humans:
             # self.rngly set the human to static or dynamic
-            if ( self.rng_np.random.random() < 0.5): 
+            if ( self.rng_np.random() < 0.5): 
                 human.type="static"  # default is dynamic
                 static_human_count += 1
 
@@ -2294,7 +2294,7 @@ class SocNavEnv_v1(gym.Env):
         # add the humans from the interaction into the human list
         for human in interaction.humans:
             # self.rngly set the human to static or dynamic
-            if ( self.rng_np.random.random() < 0.5): 
+            if ( self.rng_np.random() < 0.5): 
                 human.type="static"  # default is dynamic
                 static_humans.append(human)
             else:
@@ -2318,7 +2318,7 @@ class SocNavEnv_v1(gym.Env):
                 interaction.humans.append(human)
             
             # self.rngly make this interaction static
-            if  self.rng_np.random.random() <= 0.5:
+            if  self.rng_np.random() <= 0.5:
                 self.moving_interactions.pop(index)
                 interaction.type = "stationary"
                 for human in interaction.humans:
@@ -3356,7 +3356,7 @@ class SocNavEnv_v1(gym.Env):
             table = self.tables[i]
             
             # pick a self.rng edge
-            edge =  self.rng_np.random.randint(0, 4)
+            edge =  self.rng.randint(0, 4)
             if edge == 0:
                 center = (
                     table.x + np.cos(table.orientation + np.pi/2) * (table.width-self.LAPTOP_WIDTH)/2, 
@@ -3378,7 +3378,7 @@ class SocNavEnv_v1(gym.Env):
                 )
                 theta = table.orientation
             
-            elif edge == 3:
+            else:
                 center = (
                     table.x + np.cos(table.orientation) * (table.length-self.LAPTOP_LENGTH)/2, 
                     table.y + np.sin(table.orientation) * (table.length-self.LAPTOP_LENGTH)/2

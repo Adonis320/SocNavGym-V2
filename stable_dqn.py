@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from socnavgym.wrappers import DiscreteActions
+from socnavgym.wrappers import ExpertObservations
 from stable_baselines3 import DQN
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from math import sqrt
@@ -73,7 +74,8 @@ if args["api_key"] is not None:
 
 
 env = gym.make("SocNavGym-v1", config=args["env_config"])
-env = DiscreteActions(env)
+#env = DiscreteActions(env)
+env = ExpertObservations(env)
 
 net_arch = {}
 
@@ -86,7 +88,7 @@ else:
 policy_kwargs = {"net_arch" : net_arch}
 
 device = 'cuda:'+str(args["gpu"]) if torch.cuda.is_available() else 'cpu'
-model = DQN("MultiInputPolicy", env, verbose=0, policy_kwargs=policy_kwargs, device=device, tensorboard_log="dqn")
+model = DQN("MultiInputPolicy", env, verbose=0, policy_kwargs=policy_kwargs, device=device)
 if args["api_key"] is not None:
     callback = CometMLCallback(args["run_name"], args["save_path"], args["project_name"], args["api_key"])
 else:

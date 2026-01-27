@@ -3,3 +3,4 @@ from socnavgym.wrappers.partial_observations import PartialObservations
 from socnavgym.wrappers.noisy_observations import NoisyObservations
 from socnavgym.wrappers.discrete_actions import DiscreteActions
 from socnavgym.wrappers.cardinal_actions import CardinalActions
+from socnavgym.wrappers.expert_observations import ExpertObservations
