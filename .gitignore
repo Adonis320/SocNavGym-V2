@@ -58,6 +58,8 @@ coverage.xml
 
 deps/
 
+socnavgym.egg-info/
+
 # Django stuff:
 *.log
 local_settings.py
