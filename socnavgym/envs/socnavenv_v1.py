@@ -2920,6 +2920,11 @@ class SocNavEnv_v1(gym.Env):
                 else:
                     time_to_collision = min(time_to_collision, ceil(t / self.TIMESTEP))
         
+        if self.done:
+            info["episode"] = {}
+            info["episode"]['l'] = self.ticks
+            info["episode"]['r'] = reward
+        
         if time_to_collision is None:
             info["TIME_TO_COLLISION"] = -1
         else:
@@ -3290,8 +3295,8 @@ class SocNavEnv_v1(gym.Env):
         if object_type == SocNavGymObject.ROBOT:
             arg_dict = {
                 "id": 0,  # robot is assigned id 0
-                "x": self.rng.uniform(-HALF_SIZE_X, HALF_SIZE_X),
-                "y": self.rng.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
+                "x": random.uniform(-HALF_SIZE_X, HALF_SIZE_X),
+                "y": random.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
                 "theta": self.rng.uniform(-np.pi, np.pi),
                 "radius": self.ROBOT_RADIUS,
                 "goal_x": None,
