@@ -45,6 +45,7 @@ from socnavgym.envs.utils.sngnnv2.socnav_V2_API import Object as otherObject
 from socnavgym.envs.utils.sngnnv2.socnav_V2_API import SNScenario, SocNavAPI
 
 from socnavgym.envs.utils.navigation.probabilistic_road_map import prm_planning
+from socnavgym.envs.utils.obs_grid_render import render_state_discretizer_grid
 
 DEBUG = 0
 if 'debug' in sys.argv or "debug=2" in sys.argv:
@@ -3925,3 +3926,36 @@ class SocNavEnv_v1(gym.Env):
 
     def close(self):
         pass
+    
+    def render_debug(
+        self,
+        obs,
+        discretizer,
+        draw_human_gaze=False,
+        draw_human_goal=True,
+        show=True,
+        window_name="SocNavGym Debug",
+        delay_ms=50,          # ← add this
+    ):
+        world = self.render_without_showing(
+            draw_human_gaze=draw_human_gaze,
+            draw_human_goal=draw_human_goal,
+        )
+
+        local = render_state_discretizer_grid(
+            obs=obs,
+            env=self,
+            discretizer=discretizer,
+            show_grid_lines=True,
+            draw_robot_glyph=True,
+            label="StateDiscretizer grid (goal + closest human)",
+        )
+
+        panel = cv2.hconcat([world, local])
+
+        if show:
+            cv2.imshow(window_name, panel)
+            cv2.waitKey(delay_ms)   # ← controls speed
+
+        return panel
+
