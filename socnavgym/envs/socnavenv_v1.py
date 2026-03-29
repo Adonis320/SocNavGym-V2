@@ -14,7 +14,6 @@ import rvo2
 import torch
 import yaml
 from gymnasium import spaces
-from shapely.geometry import Point, Polygon
 from scipy.spatial import KDTree
 from collections import namedtuple
 import math
@@ -362,6 +361,7 @@ class SocNavEnv_v1(gym.Env):
         self.HUMAN_GAZE_ANGLE = config["human"]["gaze_angle"]
         self.PROB_TO_AVOID_ROBOT = config["human"]["prob_to_avoid_robot"]
         self.HUMAN_FOV = config["human"]["fov_angle"]
+        self.USE_HUMAN_VISIBILITY = config["human"].get("use_visibility_check", False)
         if "pos_noise_std" in config["human"].keys():
             self.HUMAN_POS_NOISE_STD = config["human"]["pos_noise_std"]
         if "angle_noise_std" in config["human"].keys():
@@ -786,17 +786,16 @@ class SocNavEnv_v1(gym.Env):
         """
         # check if the coordinates and orientation are not None
         assert(self.robot.x is not None and self.robot.y is not None and self.robot.orientation is not None), "Robot coordinates or orientation are None type"
-        # initalizing the matrix
-        tm = np.zeros((3,3), dtype=np.float32)
-        # filling values as described
-        tm[2,2] = 1
-        tm[0,2] = self.robot.x
-        tm[1,2] = self.robot.y
-        tm[0,0] = tm[1,1] = np.cos(self.robot.orientation)
-        tm[1,0] = np.sin(self.robot.orientation)
-        tm[0,1] = -1*np.sin(self.robot.orientation)
-
-        return np.linalg.inv(tm)
+        # Closed-form inverse of [[cos,-sin,x],[sin,cos,y],[0,0,1]]
+        cos_t = math.cos(self.robot.orientation)
+        sin_t = math.sin(self.robot.orientation)
+        x, y = self.robot.x, self.robot.y
+        tm = np.array([
+            [ cos_t,  sin_t, -x * cos_t - y * sin_t],
+            [-sin_t,  cos_t,  x * sin_t - y * cos_t],
+            [ 0,      0,      1                     ],
+        ], dtype=np.float32)
+        return tm
     
     @property
     def is_entity_present(self)->Dict[str, bool]:
@@ -837,16 +836,16 @@ class SocNavEnv_v1(gym.Env):
         # check if the coordinates and orientation are not None
         assert(human.x is not None and human.y is not None and human.orientation is not None), "Human coordinates or orientation are None type"
         # initalizing the matrix
-        tm = np.zeros((3,3), dtype=np.float32)
-        # filling values as described
-        tm[2,2] = 1
-        tm[0,2] = human.x
-        tm[1,2] = human.y
-        tm[0,0] = tm[1,1] = np.cos(human.orientation)
-        tm[1,0] = np.sin(human.orientation)
-        tm[0,1] = -1*np.sin(human.orientation)
-
-        return np.linalg.inv(tm)
+        # Closed-form inverse of [[cos,-sin,x],[sin,cos,y],[0,0,1]]
+        cos_t = math.cos(human.orientation)
+        sin_t = math.sin(human.orientation)
+        x, y = human.x, human.y
+        tm = np.array([
+            [ cos_t,  sin_t, -x * cos_t - y * sin_t],
+            [-sin_t,  cos_t,  x * sin_t - y * cos_t],
+            [ 0,      0,      1                     ],
+        ], dtype=np.float32)
+        return tm
 
     def get_robot_frame_coordinates(self, coord):
         """
@@ -881,51 +880,46 @@ class SocNavEnv_v1(gym.Env):
         return coord_in_robot_frame[:, 0:2]
 
     def is_entity_visible_in_human_frame(self, human:Human, entity:Object):
+        # skip visibility check if disabled in config (all entities treated as visible)
+        if not self.USE_HUMAN_VISIBILITY:
+            return True
         # return True if the frame of view is very close to 2*pi
-        if abs(human.fov - 2*(np.pi)) < 0.1: return True
-        
-        sector_points = []
-        start_angle = human.orientation - human.fov/2
-        end_angle = human.orientation + human.fov/2
-        radius = 0
-        for p in [(self.MAP_X/2, self.MAP_Y/2), (-self.MAP_X/2, self.MAP_Y/2), (self.MAP_X/2, -self.MAP_Y/2), (-self.MAP_X/2, -self.MAP_Y/2)]:
-            radius = max(radius, np.linalg.norm([human.x-p[0], human.y-p[1]]))
-        
-        # hardcoded resolution of 1000 points
-        for steps in range(1001):
-            angle = ((end_angle-start_angle)/1000)*steps + start_angle
-            sector_points.append([human.x + radius*np.cos(angle), human.y + radius*np.sin(angle)])
-        
-        # append the center of the sector
-        sector_points.append([human.x, human.y])
+        if abs(human.fov - 2 * math.pi) < 0.1:
+            return True
 
+        dx = entity.x - human.x
+        dy = entity.y - human.y
+        dist = math.hypot(dx, dy)
+
+        # Bounding radius of the entity
         if entity.name == "plant" or entity.name == "robot":
-            assert(entity.x != None and entity.y != None and entity.radius != None), "Attributes are None type"
-            other_obj = Point((entity.x, entity.y)).buffer(entity.radius)
-        
+            r = entity.radius
         elif entity.name == "human":
-            assert(entity.x != None and entity.y != None and entity.width != None), "Attributes are None type"
-            other_obj = Point((entity.x, entity.y)).buffer(entity.width/2)
-        
-        elif entity.name == "laptop" or entity.name == "table" or entity.name == "chaie":
-            assert(entity.x != None and entity.y != None and entity.width != None and entity.length != None and entity.orientation != None), "Attributes are None type"
-            other_obj = Polygon(get_coordinates_of_rotated_rectangle(entity.x, entity.y, entity.orientation, entity.length, entity.width))
-
+            r = entity.width / 2
+        elif entity.name == "laptop" or entity.name == "table" or entity.name == "chair":
+            r = math.hypot(entity.length / 2, entity.width / 2)
         elif entity.name == "wall":
-            assert(entity.x != None and entity.y != None and entity.thickness != None and entity.length != None and entity.orientation != None), "Attributes are None type"
-            other_obj = Polygon(get_coordinates_of_rotated_rectangle(entity.x, entity.y, entity.orientation, entity.length, entity.thickness))
-
+            r = math.hypot(entity.length / 2, entity.thickness / 2)
         elif entity.name == "human-human-interaction":
-            other_obj = Point((entity.x, entity.y)).buffer(entity.radius)
-        
+            r = entity.radius
         elif entity.name == "human-laptop-interaction":
-            other_obj = Point((entity.x, entity.y)).buffer(entity.distance/2)
-        
-        else: raise NotImplementedError
+            r = entity.distance / 2
+        else:
+            raise NotImplementedError
 
-        sector = Polygon(sector_points)
-        # if it lies within the range, then it would intersect the sector
-        return other_obj.intersects(sector)
+        # If human is inside the entity's bounding circle, it is definitely visible
+        if dist <= r:
+            return True
+
+        # Angle from human to entity center, relative to human's facing direction
+        angle_diff = math.atan2(dy, dx) - human.orientation
+        # Normalize to [-pi, pi]
+        angle_diff = (angle_diff + math.pi) % (2 * math.pi) - math.pi
+
+        # Angular half-size of entity's bounding circle at this distance
+        angular_half_size = math.asin(r / dist)
+
+        return abs(angle_diff) <= human.fov / 2 + angular_half_size
 
     def _get_entity_obs(self, object): 
         """
@@ -962,23 +956,17 @@ class SocNavEnv_v1(gym.Env):
                 centers.append((right_x - np.cos(wall.orientation)*length/2, right_y - np.sin(wall.orientation)*length/2))
                 lengths.append(length)
             
-            obs = np.array([], dtype=np.float32)
-            
+            obs_parts = []
+            rel_sin = np.sin(wall.orientation - self.robot.orientation)
+            rel_cos = np.cos(wall.orientation - self.robot.orientation)
+            robot_speed = -np.sqrt(self.robot.vel_x**2 + self.robot.vel_y**2)
             for center, length in zip(centers, lengths):
-                # wall encoding
-                obs = np.concatenate((obs, wall.one_hot_encoding))
-                # coorinates of the wall
-                obs = np.concatenate((obs, self.get_robot_frame_coordinates(np.array([[center[0], center[1]]])).flatten()))
-                # sin and cos of relative angles
-                obs = np.concatenate((obs, np.array([(np.sin(wall.orientation - self.robot.orientation)), np.cos(wall.orientation - self.robot.orientation)])))
-                # radius of the wall = length/2
-                obs = np.concatenate((obs, np.array([length/2])))
-                # relative speeds based on robot type
-                relative_speeds = np.array([-np.sqrt(self.robot.vel_x**2 + self.robot.vel_y**2), -self.robot.vel_a], dtype=np.float32)
-                obs = np.concatenate((obs, relative_speeds))
-                # gaze for walls is 0
-                obs = np.concatenate((obs, np.array([0.0])))
-                obs = obs.flatten().astype(np.float32)
+                obs_parts.append(np.concatenate([
+                    wall.one_hot_encoding,
+                    self.get_robot_frame_coordinates(np.array([[center[0], center[1]]])).flatten(),
+                    np.array([rel_sin, rel_cos, length / 2, robot_speed, -self.robot.vel_a, 0.0], dtype=np.float32),
+                ]).astype(np.float32))
+            obs = np.concatenate(obs_parts) if obs_parts else np.array([], dtype=np.float32)
             
             wall_coordinates = self.get_robot_frame_coordinates(np.array([[wall.x, wall.y]])).flatten()
             self._current_observations[wall.id] = EntityObs(
@@ -996,95 +984,40 @@ class SocNavEnv_v1(gym.Env):
         if object.name == "wall":
             return _get_wall_obs(object, self.WALL_SEGMENT_SIZE)
 
-        # initializing output array
-        output = np.array([], dtype=np.float32)
-        
-        # object's one-hot encoding
-        output = np.concatenate(
-            (
-                output,
-                object.one_hot_encoding
-            ),
-            dtype=np.float32
-        )
-
-        # object's coordinates in the robot frame
-        output = np.concatenate(
-                    (
-                        output,
-                        self.get_robot_frame_coordinates(np.array([[object.x, object.y]])).flatten() 
-                    ),
-                    dtype=np.float32
-                )
-
-        # sin and cos of the relative angle of the object
-        output = np.concatenate(
-                    (
-                        output,
-                        np.array([(np.sin(object.orientation - self.robot.orientation)), np.cos(object.orientation - self.robot.orientation)]) 
-                    ),
-                    dtype=np.float32
-                )
-
         # object's radius
-        radius = 0
         if object.name == "plant":
             radius = object.radius
         elif object.name == "human":
-            radius = object.width/2
+            radius = object.width / 2
         elif object.name == "table" or object.name == "laptop" or object.name == "chair":
-            radius = np.sqrt((object.length/2)**2 + (object.width/2)**2)
-        else: raise NotImplementedError
+            radius = math.hypot(object.length / 2, object.width / 2)
+        else:
+            raise NotImplementedError
 
-        output = np.concatenate(
-            (
-                output,
-                np.array([radius], dtype=np.float32)
-            ),
-            dtype=np.float32
-        )
+        robot_vel_x = self.robot.vel_x * math.cos(self.robot.orientation) + self.robot.vel_y * math.cos(self.robot.orientation + math.pi / 2)
+        robot_vel_y = self.robot.vel_x * math.sin(self.robot.orientation) + self.robot.vel_y * math.sin(self.robot.orientation + math.pi / 2)
 
-        robot_vel_x = self.robot.vel_x * np.cos(self.robot.orientation) + self.robot.vel_y * np.cos(self.robot.orientation + np.pi/2)
-        robot_vel_y = self.robot.vel_x * np.sin(self.robot.orientation) + self.robot.vel_y * np.sin(self.robot.orientation + np.pi/2)
-
-        # relative speeds for static objects
-        relative_speeds = np.array([-np.sqrt(self.robot.vel_x**2 + self.robot.vel_y**2), -self.robot.vel_a], dtype=np.float32)
-        
-        if object.name == "human": # the only dynamic object
-            #if object.type == "static":
-                #assert object.speed <= 0.001, "static human has speed" 
-            # relative linear speed
-            relative_speeds[0] = np.sqrt((object.speed*np.cos(object.orientation) - robot_vel_x)**2 + (object.speed*np.sin(object.orientation) - robot_vel_y)**2) 
-            relative_speeds[1] = (np.arctan2(np.sin(object.orientation - self.robot.orientation), np.cos(object.orientation - self.robot.orientation)) - self._prev_observations[object.id].theta) / self.TIMESTEP
-        
-        output = np.concatenate(
-                    (
-                        output,
-                        relative_speeds
-                    ),
-                    dtype=np.float32
-                )
-
-        # adding gaze
-        gaze = 0.0
+        rel_orient = object.orientation - self.robot.orientation
+        relative_speeds = np.array([-math.sqrt(self.robot.vel_x**2 + self.robot.vel_y**2), -self.robot.vel_a], dtype=np.float32)
 
         if object.name == "human":
-            robot_in_human_frame = self.get_human_frame_coordinates(object, np.array([[self.robot.x, self.robot.y]])).flatten()
-            robot_x = robot_in_human_frame[0]
-            robot_y = robot_in_human_frame[1]
+            relative_speeds[0] = math.sqrt((object.speed * math.cos(object.orientation) - robot_vel_x)**2 + (object.speed * math.sin(object.orientation) - robot_vel_y)**2)
+            relative_speeds[1] = (math.atan2(math.sin(rel_orient), math.cos(rel_orient)) - self._prev_observations[object.id].theta) / self.TIMESTEP
 
-            if np.arctan2(robot_y, robot_x) >= -self.HUMAN_GAZE_ANGLE/2 and np.arctan2(robot_y, robot_x)<= self.HUMAN_GAZE_ANGLE/2:
+        gaze = 0.0
+        if object.name == "human":
+            robot_in_human_frame = self.get_human_frame_coordinates(object, np.array([[self.robot.x, self.robot.y]])).flatten()
+            angle_to_robot = math.atan2(robot_in_human_frame[1], robot_in_human_frame[0])
+            if -self.HUMAN_GAZE_ANGLE / 2 <= angle_to_robot <= self.HUMAN_GAZE_ANGLE / 2:
                 gaze = 1.0
 
-        output = np.concatenate(
-                    (
-                        output,
-                        np.array([gaze])
-                    ),
-                    dtype=np.float32
-                )
-                
-        output = output.flatten()
+        output = np.concatenate([
+            object.one_hot_encoding,
+            self.get_robot_frame_coordinates(np.array([[object.x, object.y]])).flatten(),
+            np.array([math.sin(rel_orient), math.cos(rel_orient), radius], dtype=np.float32),
+            relative_speeds,
+            np.array([gaze], dtype=np.float32),
+        ]).astype(np.float32)
         self._current_observations[object.id] = EntityObs(
             object.id,
             output[6],
@@ -1108,88 +1041,50 @@ class SocNavEnv_v1(gym.Env):
         d = {}
         
         # goal coordinates in the robot frame
-        goal_in_robot_frame = self.get_robot_frame_coordinates(np.array([[self.robot.goal_x, self.robot.goal_y]], dtype=np.float32))
-        # converting into the required shape
-        robot_obs = goal_in_robot_frame.flatten()
+        goal_rf = self.get_robot_frame_coordinates(np.array([[self.robot.goal_x, self.robot.goal_y]], dtype=np.float32)).flatten()
+        d["robot"] = np.concatenate([self.robot.one_hot_encoding, goal_rf, np.array([self.ROBOT_RADIUS], dtype=np.float32)]).astype(np.float32)
 
-        # concatenating with the robot's one-hot-encoding
-        robot_obs = np.concatenate((self.robot.one_hot_encoding, robot_obs), dtype=np.float32)
-        
-        # adding the radius of the robot to the robot's observation
-        robot_obs = np.concatenate((robot_obs, np.array([self.ROBOT_RADIUS], dtype=np.float32))).flatten()
-
-        # placing it in a dictionary
-        d["robot"] = robot_obs
-        
         # getting the observations of humans
-        human_obs = np.array([], dtype=np.float32)
+        human_parts = []
         for human in self.static_humans + self.dynamic_humans:
-            obs = self._get_entity_obs(human)
-            human_obs = np.concatenate((human_obs, obs), dtype=np.float32)
-        
+            human_parts.append(self._get_entity_obs(human))
         for i in (self.moving_interactions + self.static_interactions + self.h_l_interactions):
             if i.name == "human-human-interaction":
                 for human in i.humans:
-                    obs = self._get_entity_obs(human)
-                    human_obs = np.concatenate((human_obs, obs), dtype=np.float32)
+                    human_parts.append(self._get_entity_obs(human))
             elif i.name == "human-laptop-interaction":
-                obs = self._get_entity_obs(i.human)
-                human_obs = np.concatenate((human_obs, obs), dtype=np.float32)
-       
+                human_parts.append(self._get_entity_obs(i.human))
+        human_obs = np.concatenate(human_parts, dtype=np.float32) if human_parts else np.array([], dtype=np.float32)
         if self.get_padded_observations:
-            # padding with zeros
             human_obs = np.concatenate((human_obs, np.zeros(self.observation_space["humans"].shape[0] - human_obs.shape[0])), dtype=np.float32)
-        
-        # inserting in the dictionary
         if self.is_entity_present["humans"]:
             d["humans"] = human_obs
 
-    
         # getting the observations of laptops
-        laptop_obs = np.array([], dtype=np.float32)
+        laptop_parts = []
         for laptop in self.laptops:
-            obs = self._get_entity_obs(laptop)
-            laptop_obs = np.concatenate((laptop_obs, obs), dtype=np.float32)
-        
+            laptop_parts.append(self._get_entity_obs(laptop))
         for i in self.h_l_interactions:
-            obs = self._get_entity_obs(i.laptop)
-            laptop_obs = np.concatenate((laptop_obs, obs), dtype=np.float32)
-       
+            laptop_parts.append(self._get_entity_obs(i.laptop))
+        laptop_obs = np.concatenate(laptop_parts, dtype=np.float32) if laptop_parts else np.array([], dtype=np.float32)
         if self.get_padded_observations:
-            # padding with zeros
-            laptop_obs = np.concatenate((laptop_obs, np.zeros(self.observation_space["laptops"].shape[0] -laptop_obs.shape[0])), dtype=np.float32)
-        
-        # inserting in the dictionary
+            laptop_obs = np.concatenate((laptop_obs, np.zeros(self.observation_space["laptops"].shape[0] - laptop_obs.shape[0])), dtype=np.float32)
         if self.is_entity_present["laptops"]:
             d["laptops"] = laptop_obs
-    
 
         # getting the observations of tables
-        table_obs = np.array([], dtype=np.float32)
-        for table in self.tables:
-            obs = self._get_entity_obs(table)
-            table_obs = np.concatenate((table_obs, obs), dtype=np.float32)
-
+        table_parts = [self._get_entity_obs(t) for t in self.tables]
+        table_obs = np.concatenate(table_parts, dtype=np.float32) if table_parts else np.array([], dtype=np.float32)
         if self.get_padded_observations:
-            # padding with zeros
-            table_obs = np.concatenate((table_obs, np.zeros(self.observation_space["tables"].shape[0] -table_obs.shape[0])), dtype=np.float32)
-        
-        # inserting in the dictionary
+            table_obs = np.concatenate((table_obs, np.zeros(self.observation_space["tables"].shape[0] - table_obs.shape[0])), dtype=np.float32)
         if self.is_entity_present["tables"]:
             d["tables"] = table_obs
 
-
         # getting the observations of plants
-        plant_obs = np.array([], dtype=np.float32)
-        for plant in self.plants:
-            obs = self._get_entity_obs(plant)
-            plant_obs = np.concatenate((plant_obs, obs), dtype=np.float32)
-
+        plant_parts = [self._get_entity_obs(p) for p in self.plants]
+        plant_obs = np.concatenate(plant_parts, dtype=np.float32) if plant_parts else np.array([], dtype=np.float32)
         if self.get_padded_observations:
-            # padding with zeros
-            plant_obs = np.concatenate((plant_obs, np.zeros(self.observation_space["plants"].shape[0] -plant_obs.shape[0])), dtype=np.float32)
-        
-        # inserting in the dictionary
+            plant_obs = np.concatenate((plant_obs, np.zeros(self.observation_space["plants"].shape[0] - plant_obs.shape[0])), dtype=np.float32)
         if self.is_entity_present["plants"]:
             d["plants"] = plant_obs
 
@@ -2575,66 +2470,37 @@ class SocNavEnv_v1(gym.Env):
         """
         Used to fill the dictionary storing the previous observations
         """
-        
-        # adding humans, tables, laptops, plants, walls
-        for entity in self.static_humans + self.dynamic_humans + self.tables + self.laptops + self.plants + self.walls:
-            coordinates = self.get_robot_frame_coordinates(np.array([[entity.x, entity.y]], dtype=np.float32)).flatten()
-            sin_theta = np.sin(entity.orientation - self.robot.orientation)
-            cos_theta = np.cos(entity.orientation - self.robot.orientation)
-            theta = np.arctan2(sin_theta, cos_theta)
-            self._prev_observations[entity.id] = EntityObs(
-                entity.id,
-                coordinates[0],
-                coordinates[1],
-                theta,
-                sin_theta,
-                cos_theta
-            )
-
-        # adding human-human interactions
+        # Collect all entities into a flat list for batched transformation
+        all_entities = list(
+            self.static_humans + self.dynamic_humans +
+            self.tables + self.laptops + self.plants + self.walls
+        )
         for i in self.moving_interactions + self.static_interactions:
-            for entity in i.humans:
-                coordinates = self.get_robot_frame_coordinates(np.array([[entity.x, entity.y]], dtype=np.float32)).flatten()
-                sin_theta = np.sin(entity.orientation - self.robot.orientation)
-                cos_theta = np.cos(entity.orientation - self.robot.orientation)
-                theta = np.arctan2(sin_theta, cos_theta)
-                self._prev_observations[entity.id] = EntityObs(
-                    entity.id,
-                    coordinates[0],
-                    coordinates[1],
-                    theta,
-                    sin_theta,
-                    cos_theta
-                )
-        
-        # adding human-laptop interactions
+            all_entities.extend(i.humans)
         for i in self.h_l_interactions:
-            entity = i.human
-            coordinates = self.get_robot_frame_coordinates(np.array([[entity.x, entity.y]], dtype=np.float32)).flatten()
-            sin_theta = np.sin(entity.orientation - self.robot.orientation)
-            cos_theta = np.cos(entity.orientation - self.robot.orientation)
-            theta = np.arctan2(sin_theta, cos_theta)
-            self._prev_observations[entity.id] = EntityObs(
-                entity.id,
-                coordinates[0],
-                coordinates[1],
-                theta,
-                sin_theta,
-                cos_theta
-            )
+            all_entities.append(i.human)
+            all_entities.append(i.laptop)
 
-            entity = i.laptop
-            coordinates = self.get_robot_frame_coordinates(np.array([[entity.x, entity.y]], dtype=np.float32)).flatten()
-            sin_theta = np.sin(entity.orientation - self.robot.orientation)
-            cos_theta = np.cos(entity.orientation - self.robot.orientation)
-            theta = np.arctan2(sin_theta, cos_theta)
+        if not all_entities:
+            return
+
+        # Single batched coordinate transformation
+        coords = np.array([[e.x, e.y] for e in all_entities], dtype=np.float32)
+        homogeneous = np.c_[coords, np.ones(len(all_entities), dtype=np.float32)]
+        transformed = (self.transformation_matrix @ homogeneous.T).T[:, :2]
+
+        robot_orientation = self.robot.orientation
+        for idx, entity in enumerate(all_entities):
+            rel_orient = entity.orientation - robot_orientation
+            sin_theta = math.sin(rel_orient)
+            cos_theta = math.cos(rel_orient)
             self._prev_observations[entity.id] = EntityObs(
                 entity.id,
-                coordinates[0],
-                coordinates[1],
-                theta,
+                transformed[idx, 0],
+                transformed[idx, 1],
+                math.atan2(sin_theta, cos_theta),
                 sin_theta,
-                cos_theta
+                cos_theta,
             )
         
     def compute_reward_and_ticks(self, action):
@@ -2691,21 +2557,6 @@ class SocNavEnv_v1(gym.Env):
         for i in self.h_l_interactions: self.all_humans.append(i.human)
 
         for human in self.all_humans:
-            px = human.x - self.robot.x
-            py = human.y - self.robot.y
-
-            vx = human.speed*np.cos(human.orientation) - action[0] * np.cos(action[2]*self.TIMESTEP + self.robot.orientation) - action[1] * np.cos(action[2]*self.TIMESTEP + self.robot.orientation + np.pi/2)
-            vy = human.speed*np.sin(human.orientation) - action[0] * np.sin(action[2]*self.TIMESTEP + self.robot.orientation) - action[1] * np.sin(action[2]*self.TIMESTEP + self.robot.orientation + np.pi/2)
-
-            ex = px + vx * self.TIMESTEP
-            ey = py + vy * self.TIMESTEP
-
-            closest_dist = point_to_segment_dist(px, py, ex, ey, 0, 0) - self.HUMAN_DIAMETER/2 - self.ROBOT_RADIUS
-
-            if closest_dist < dmin:
-                dmin = closest_dist
-
-        for human in self.static_humans + self.dynamic_humans:
             px = human.x - self.robot.x
             py = human.y - self.robot.y
 
@@ -2853,68 +2704,18 @@ class SocNavEnv_v1(gym.Env):
         # calculating the closest distance to humans and time to collision
         closest_human_dist = float('inf')
         time_to_collision = None
-        robot_vx = action[0]*np.cos(self.robot.orientation) + action[1]*np.cos(self.robot.orientation + np.pi/2)
-        robot_vy = action[0]*np.sin(self.robot.orientation) + action[1]*np.sin(self.robot.orientation + np.pi/2)
+        robot_vx = action[0] * math.cos(self.robot.orientation) + action[1] * math.cos(self.robot.orientation + math.pi / 2)
+        robot_vy = action[0] * math.sin(self.robot.orientation) + action[1] * math.sin(self.robot.orientation + math.pi / 2)
 
-        for h in self.static_humans + self.dynamic_humans:
-            closest_human_dist = min(closest_human_dist, np.sqrt((self.robot.x-h.x)**2 + (self.robot.y-h.y)**2))
+        for h in self.all_humans:
+            closest_human_dist = min(closest_human_dist, math.hypot(self.robot.x - h.x, self.robot.y - h.y))
             t = compute_time_to_collision(
-                self.robot.x, 
-                self.robot.y, 
-                robot_vx,
-                robot_vy,
-                h.x,
-                h.y,
-                h.speed * np.cos(h.orientation),
-                h.speed * np.sin(h.orientation),
-                self.ROBOT_RADIUS,
-                self.HUMAN_DIAMETER/2
+                self.robot.x, self.robot.y, robot_vx, robot_vy,
+                h.x, h.y,
+                h.speed * math.cos(h.orientation),
+                h.speed * math.sin(h.orientation),
+                self.ROBOT_RADIUS, self.HUMAN_DIAMETER / 2
             )
-
-            if t != -1:
-                if time_to_collision is None:
-                    time_to_collision = ceil(t / self.TIMESTEP)
-                else:
-                    time_to_collision = min(time_to_collision, ceil(t / self.TIMESTEP))
-
-        for i in self.moving_interactions + self.static_interactions:
-            for h in i.humans:
-                closest_human_dist = min(closest_human_dist, np.sqrt((self.robot.x-h.x)**2 + (self.robot.y-h.y)**2))
-                t = compute_time_to_collision(
-                    self.robot.x, 
-                    self.robot.y, 
-                    robot_vx,
-                    robot_vy,
-                    h.x,
-                    h.y,
-                    h.speed * np.cos(h.orientation),
-                    h.speed * np.sin(h.orientation),
-                    self.ROBOT_RADIUS,
-                    self.HUMAN_DIAMETER/2
-                )
-
-                if t != -1:
-                    if time_to_collision is None:
-                        time_to_collision = ceil(t / self.TIMESTEP)
-                    else:
-                        time_to_collision = min(time_to_collision, ceil(t / self.TIMESTEP))
-        
-        for i in self.h_l_interactions:
-            closest_human_dist = min(closest_human_dist, np.sqrt((self.robot.x-i.human.x)**2 + (self.robot.y-i.human.y)**2))
-            h = i.human
-            t = compute_time_to_collision(
-                self.robot.x, 
-                self.robot.y, 
-                robot_vx,
-                robot_vy,
-                h.x,
-                h.y,
-                h.speed * np.cos(h.orientation),
-                h.speed * np.sin(h.orientation),
-                self.ROBOT_RADIUS,
-                self.HUMAN_DIAMETER/2
-            )
-
             if t != -1:
                 if time_to_collision is None:
                     time_to_collision = ceil(t / self.TIMESTEP)

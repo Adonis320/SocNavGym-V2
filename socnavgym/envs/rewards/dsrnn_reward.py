@@ -52,21 +52,6 @@ class Reward(RewardAPI):
             if closest_dist < dmin:
                 dmin = closest_dist
 
-        for human in self.env.static_humans + self.env.dynamic_humans:
-            px = human.x - self.env.robot.x
-            py = human.y - self.env.robot.y
-
-            vx = human.speed*np.cos(human.orientation) - action[0] * np.cos(action[2]*self.env.TIMESTEP + self.env.robot.orientation) - action[1] * np.cos(action[2]*self.env.TIMESTEP + self.env.robot.orientation + np.pi/2)
-            vy = human.speed*np.sin(human.orientation) - action[0] * np.sin(action[2]*self.env.TIMESTEP + self.env.robot.orientation) - action[1] * np.sin(action[2]*self.env.TIMESTEP + self.env.robot.orientation + np.pi/2)
-
-            ex = px + vx * self.env.TIMESTEP
-            ey = py + vy * self.env.TIMESTEP
-
-            closest_dist = point_to_segment_dist(px, py, ex, ey, 0, 0) - self.env.HUMAN_DIAMETER/2 - self.env.ROBOT_RADIUS
-
-            if closest_dist < dmin:
-                dmin = closest_dist
-
         for interaction in (self.env.moving_interactions + self.env.static_interactions + self.env.h_l_interactions):
             px = interaction.x - self.env.robot.x
             py = interaction.y - self.env.robot.y
