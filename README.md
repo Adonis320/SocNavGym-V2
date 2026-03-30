@@ -28,14 +28,11 @@ The original SocNavGym ships with four wrappers (`DiscreteActions`, `NoisyObserv
 
 #### `ExpertObservations`
 
-A wrapper that exposes a compact, structured observation designed for learning experiments. It:
-- Provides a flat, fixed-size observation combining robot state and the most relevant nearby entities.
-- Automatically infers the one-hot encoding length from the observation to remain config-agnostic.
-- Exposes a **7-action discrete action space** (turn left/right, move forward/backward with/without turning, no-op), matching a typical discrete DQN setup.
+Reduces the full dictionary observation to just two entries: the robot's goal position and orientation (`robot`: 3 values), and the closest human's position in the robot frame (`humans`: 2 values). Action space is 7 discrete actions: turn CCW, turn CW, forward+CCW, forward+CW, forward, backward, no-op.
 
 #### `CardinalActions`
 
-A lightweight action wrapper mapping 5 discrete cardinal actions (move right, left, forward, backward, no-op) to the continuous holonomic action space. Useful for testing or tabular baselines that need axis-aligned motion.
+Maps 5 discrete actions to the continuous holonomic action space: strafe right, strafe left, move forward, move backward, no-op.
 
 ---
 
