@@ -74,4 +74,4 @@ for _ in range(1000):
 
 [https://github.com/gnns4hri/SocNavGym](https://github.com/gnns4hri/SocNavGym)
 
-> Bachiller-Burgos, P., Manso, L. J., & Núñez-Trujillo, A. (2023). *SocNavGym: A Reinforcement Learning Gym for Social Navigation*. IEEE ROMAN 2023.
+> Kapoor, A., Swamy, S., Manso, L., & Bachiller, P. (2023). *SocNavGym: A Reinforcement Learning Gym for Social Navigation*. IEEE ROMAN 2023.
