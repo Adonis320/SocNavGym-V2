@@ -1,6 +1,6 @@
 # SocNavGym — Extended for Thesis Research
 
-This repository is a fork of [SocNavGym](https://github.com/gnns4hri/SocNavGym) (IEEE ROMAN 2023), extended as part of a PhD thesis on social robot navigation. The original environment documentation is preserved in [README_SocNavGym.md](README_SocNavGym.md).
+This repository is a fork of [SocNavGym](https://github.com/gnns4hri/SocNavGym) (IEEE ROMAN 2023), extended as part of research on social robot navigation. The original environment documentation is preserved in [README_SocNavGym.md](README_SocNavGym.md).
 
 ---
 
