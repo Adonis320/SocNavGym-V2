@@ -611,13 +611,13 @@ class SocNavEnv_v1(gym.Env):
         self.humans_in_h_h_dynamic_interactions_non_dispersing = []
         self.humans_in_h_h_static_interactions_non_dispersing = []
         for _ in range(self.NUMBER_OF_H_H_DYNAMIC_INTERACTIONS):
-            self.humans_in_h_h_dynamic_interactions.append(random.randint(self.MIN_HUMAN_IN_H_H_INTERACTIONS, self.MAX_HUMAN_IN_H_H_INTERACTIONS))
+            self.humans_in_h_h_dynamic_interactions.append(self.rng.randint(self.MIN_HUMAN_IN_H_H_INTERACTIONS, self.MAX_HUMAN_IN_H_H_INTERACTIONS))
         for _ in range(self.NUMBER_OF_H_H_STATIC_INTERACTIONS):
-            self.humans_in_h_h_static_interactions.append(random.randint(self.MIN_HUMAN_IN_H_H_INTERACTIONS, self.MAX_HUMAN_IN_H_H_INTERACTIONS))
+            self.humans_in_h_h_static_interactions.append(self.rng.randint(self.MIN_HUMAN_IN_H_H_INTERACTIONS, self.MAX_HUMAN_IN_H_H_INTERACTIONS))
         for _ in range(self.NUMBER_OF_H_H_DYNAMIC_INTERACTIONS_NON_DISPERSING):
-            self.humans_in_h_h_dynamic_interactions_non_dispersing.append(random.randint(self.MIN_HUMAN_IN_H_H_INTERACTIONS, self.MAX_HUMAN_IN_H_H_INTERACTIONS))
+            self.humans_in_h_h_dynamic_interactions_non_dispersing.append(self.rng.randint(self.MIN_HUMAN_IN_H_H_INTERACTIONS, self.MAX_HUMAN_IN_H_H_INTERACTIONS))
         for _ in range(self.NUMBER_OF_H_H_STATIC_INTERACTIONS_NON_DISPERSING):
-            self.humans_in_h_h_static_interactions_non_dispersing.append(random.randint(self.MIN_HUMAN_IN_H_H_INTERACTIONS, self.MAX_HUMAN_IN_H_H_INTERACTIONS))
+            self.humans_in_h_h_static_interactions_non_dispersing.append(self.rng.randint(self.MIN_HUMAN_IN_H_H_INTERACTIONS, self.MAX_HUMAN_IN_H_H_INTERACTIONS))
 
         self.NUMBER_OF_H_L_INTERACTIONS = self.rng.randint(self.MIN_H_L_INTERACTIONS, self.MAX_H_L_INTERACTIONS) # number of human laptop interactions
         self.NUMBER_OF_H_L_INTERACTIONS_NON_DISPERSING = self.rng.randint(self.MIN_H_L_INTERACTIONS_NON_DISPERSING, self.MAX_H_L_INTERACTIONS_NON_DISPERSING) # number of human laptop interactions that do not disperse
@@ -3097,8 +3097,8 @@ class SocNavEnv_v1(gym.Env):
         if object_type == SocNavGymObject.ROBOT:
             arg_dict = {
                 "id": 0,  # robot is assigned id 0
-                "x": random.uniform(-HALF_SIZE_X, HALF_SIZE_X),
-                "y": random.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
+                "x": self.rng.uniform(-HALF_SIZE_X, HALF_SIZE_X),
+                "y": self.rng.uniform(-HALF_SIZE_Y, HALF_SIZE_Y),
                 "theta": self.rng.uniform(-np.pi, np.pi),
                 "radius": self.ROBOT_RADIUS,
                 "goal_x": None,
@@ -3323,10 +3323,6 @@ class SocNavEnv_v1(gym.Env):
         if seed is not None:
             self.rng = random.Random(seed)
             self.rng_np = np.random.default_rng(seed)
-            #random.seed(seed)
-            # self.rng_np.random.seed(seed)
-            #self.rng = random.Random(seed)
-            #self.rng_np = np.random.default_rng(seed)
 
 
         # self.rngly initialize the parameters 
