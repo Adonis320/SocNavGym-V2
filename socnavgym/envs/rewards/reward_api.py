@@ -15,8 +15,11 @@ import os
 class RewardAPI:
     def __init__(self, env:SocNavEnv_v1) -> None:
         self.env = env
-        self.use_sngnn = False  # set this to True if SNGNN is being used in the reward function 
-        self.sngnn = SocNavAPI(device= ('cuda' if torch.cuda.is_available() else 'cpu'), params_dir=(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "utils", "sngnnv2", "example_model")))
+        self.use_sngnn = False  # set this to True if SNGNN is being used in the reward function
+        # The SNGNN model is loaded lazily (see _get_sngnn) so that environments using a
+        # reward function that doesn't need SNGNN (e.g. DSRNN) don't load it onto the GPU.
+        # This avoids exhausting GPU memory when running many parallel env instances.
+        self._sngnn = None
         self.sn_sequence = []
         self.info = {}  # record any information that should be returned in the info dict (in step function of the environment) here
 
@@ -26,6 +29,21 @@ class RewardAPI:
         self.info["distance_reward"] = 0
         self.info["alive_reward"] = 0
         self.info["sngnn_reward"] = 0
+
+    @property
+    def sngnn(self):
+        # Lazily construct the SNGNN model the first time it is actually needed,
+        # loading it onto the GPU only for reward functions that use SNGNN.
+        if self._sngnn is None:
+            self._sngnn = SocNavAPI(
+                device=('cuda' if torch.cuda.is_available() else 'cpu'),
+                params_dir=(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "utils", "sngnnv2", "example_model"))
+            )
+        return self._sngnn
+
+    @sngnn.setter
+    def sngnn(self, value):
+        self._sngnn = value
 
     def re_init(self, env:SocNavEnv_v1):
         self.__init__(env)
