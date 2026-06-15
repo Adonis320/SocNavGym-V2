@@ -559,8 +559,8 @@ class SocNavEnv_v1(gym.Env):
         
         assert(issubclass(self.reward_class, reward_api_class)), "Please make Reward class a subclass of RewardAPI class"
         self.reward_calculator = self.reward_class(self)
-        self.rng = random.Random(5)
-        self.rng_np = np.random.default_rng(5)
+        self.rng = random.Random()
+        self.rng_np = np.random.default_rng()
         self.reset()
 
     def process_reward_path(self, path:str):
